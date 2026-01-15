@@ -1,0 +1,125 @@
+import { useAppStore } from '../../store';
+import { defaultModels } from '../../lib/llm';
+import type { LLMProviderType } from '../../types';
+
+export function SettingsModal() {
+  const settings = useAppStore((state) => state.settings);
+  const updateSettings = useAppStore((state) => state.updateSettings);
+  const toggleSettings = useAppStore((state) => state.toggleSettings);
+
+  if (!settings.showSettings) return null;
+
+  const handleProviderChange = (provider: LLMProviderType) => {
+    updateSettings({
+      llmProvider: provider,
+      llmModel: defaultModels[provider][0],
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-gray-800 rounded-xl p-6 w-96 max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-white text-lg font-semibold">Settings</h2>
+          <button
+            onClick={toggleSettings}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {/* LLM Provider */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">LLM Provider</label>
+            <select
+              value={settings.llmProvider}
+              onChange={(e) => handleProviderChange(e.target.value as LLMProviderType)}
+              className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            >
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="gemini">Google Gemini</option>
+            </select>
+          </div>
+
+          {/* Model */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">Model</label>
+            <select
+              value={settings.llmModel}
+              onChange={(e) => updateSettings({ llmModel: e.target.value })}
+              className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            >
+              {defaultModels[settings.llmProvider].map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* API Key */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">API Key</label>
+            <input
+              type="password"
+              value={settings.apiKey}
+              onChange={(e) => updateSettings({ apiKey: e.target.value })}
+              placeholder="Enter your API key"
+              className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 placeholder-gray-400"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Your API key is stored locally and never sent to our servers.
+            </p>
+          </div>
+
+          {/* Character Scale */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">
+              Character Scale: {settings.characterScale.toFixed(1)}x
+            </label>
+            <input
+              type="range"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={settings.characterScale}
+              onChange={(e) => updateSettings({ characterScale: parseFloat(e.target.value) })}
+              className="w-full accent-teal-400"
+            />
+          </div>
+
+          {/* Always on Top */}
+          <div className="flex items-center justify-between">
+            <label className="text-sm text-gray-300">Always on Top</label>
+            <button
+              onClick={() => updateSettings({ alwaysOnTop: !settings.alwaysOnTop })}
+              className={`relative w-12 h-6 rounded-full transition-colors ${
+                settings.alwaysOnTop ? 'bg-teal-400' : 'bg-gray-600'
+              }`}
+            >
+              <span
+                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                  settings.alwaysOnTop ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 pt-4 border-t border-gray-700">
+          <button
+            onClick={toggleSettings}
+            className="w-full bg-gradient-to-r from-teal-400 to-cyan-400 text-white rounded-lg py-2 font-medium text-sm hover:opacity-90 transition-opacity"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
