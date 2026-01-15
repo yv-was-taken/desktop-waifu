@@ -28,12 +28,14 @@ export function CharacterModel({ config }: CharacterModelProps) {
     return 'idle';
   }, [isTalking, isThinking, isUserTyping]);
 
-  // Load FBX model and texture
+  // Load FBX model and textures from config
   const fbx = useFBX(config.model.path);
-  const texture = useTexture('/assets/Stylized Miku/Textures/StylizedMiku.png');
+  const [texture, emissiveMap] = useTexture(
+    [config.model.texture, config.model.emissiveMap].filter(Boolean) as string[]
+  );
 
   useEffect(() => {
-    if (!fbx || !groupRef.current) return;
+    if (!fbx || !texture || !groupRef.current) return;
 
     // Clone the model
     const model = fbx.clone();
@@ -44,9 +46,13 @@ export function CharacterModel({ config }: CharacterModelProps) {
     box.getSize(size);
     console.log('Model size (x, y, z):', size.x, size.y, size.z);
 
-    // Configure texture
+    // Configure textures
     texture.flipY = false;
     texture.colorSpace = THREE.SRGBColorSpace;
+    if (emissiveMap) {
+      emissiveMap.flipY = false;
+      emissiveMap.colorSpace = THREE.SRGBColorSpace;
+    }
 
     // Scale and position
     model.scale.setScalar(config.model.scale);
@@ -62,12 +68,20 @@ export function CharacterModel({ config }: CharacterModelProps) {
         child.frustumCulled = false;
 
         // Create new material with the texture
-        const newMaterial = new THREE.MeshStandardMaterial({
+        const materialConfig: THREE.MeshToonMaterialParameters = {
           map: texture,
           side: THREE.DoubleSide,
           transparent: true,
           alphaTest: 0.5,
-        });
+        };
+
+        if (emissiveMap) {
+          materialConfig.emissiveMap = emissiveMap;
+          materialConfig.emissive = new THREE.Color(0xffffff);
+          materialConfig.emissiveIntensity = 2;
+        }
+
+        const newMaterial = new THREE.MeshToonMaterial(materialConfig);
 
         child.material = newMaterial;
       }
@@ -89,7 +103,7 @@ export function CharacterModel({ config }: CharacterModelProps) {
     return () => {
       mixerRef.current?.stopAllAction();
     };
-  }, [fbx, texture, config, setCharacterLoaded]);
+  }, [fbx, texture, emissiveMap, config, setCharacterLoaded]);
 
   const getAnimationParams = (state: AnimationState, time: number) => {
     switch (state) {

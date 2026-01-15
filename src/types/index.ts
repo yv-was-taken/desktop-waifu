@@ -23,6 +23,8 @@ export interface CharacterConfig {
   name: string;
   model: {
     path: string;
+    texture: string;
+    emissiveMap?: string;
     scale: number;
     position: [number, number, number];
   };

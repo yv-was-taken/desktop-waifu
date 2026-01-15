@@ -4,13 +4,15 @@ export const mikuConfig: CharacterConfig = {
   id: 'hatsune-miku',
   name: 'Hatsune Miku',
   model: {
-    path: '/assets/Stylized Miku/Model/StylizedMiku.fbx',
+    path: '/Stylized Miku/Model/StylizedMiku.fbx',
+    texture: '/Stylized Miku/Textures/StylizedMiku.png',
+    emissiveMap: '/Stylized Miku/Textures/Emmission.png',
     scale: 0.5,
     position: [0, -1, 0],
   },
   accessories: [
-    { id: 'leek', path: '/assets/Stylized Miku/Model/Leek.fbx' },
-    { id: 'mic', path: '/assets/Stylized Miku/Model/Mic.fbx' },
+    { id: 'leek', path: '/Stylized Miku/Model/Leek.fbx' },
+    { id: 'mic', path: '/Stylized Miku/Model/Mic.fbx' },
   ],
   animations: {
     idle: ['Idle'],

@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
+import { EffectComposer, Outline } from '@react-three/postprocessing';
 import { CharacterModel } from './CharacterModel';
 import { characters, defaultCharacterId } from '../../characters';
 
@@ -38,32 +39,29 @@ export function CharacterCanvas() {
       >
         {/* Background color */}
         <color attach="background" args={['#1a1a2e']} />
-        {/* Lighting */}
-        <ambientLight intensity={0.6} />
+        
+        {/* Lighting for Toon Shading */}
+        <ambientLight intensity={0.8} />
         <directionalLight
           position={[5, 10, 5]}
-          intensity={1}
+          intensity={2.5}
           castShadow
-          shadow-mapSize={[1024, 1024]}
+          shadow-mapSize={[2048, 2048]}
         />
-        <directionalLight position={[-5, 5, -5]} intensity={0.3} />
 
-        {/* Environment for reflections */}
-        <Environment preset="studio" />
-
-        {/* Character Model */}
+        {/* Character Model and Post-processing */}
         <Suspense fallback={<LoadingFallback />}>
-          <CharacterModel config={character.config} />
+          <EffectComposer autoClear={false}>
+            <Outline
+              blur
+              visibleEdgeColor="white"
+              hiddenEdgeColor="white"
+              edgeStrength={100}
+              width={1000}
+            />
+            <CharacterModel config={character.config} />
+          </EffectComposer>
         </Suspense>
-
-        {/* Ground shadow */}
-        <ContactShadows
-          position={[0, -1, 0]}
-          opacity={0.4}
-          scale={10}
-          blur={2}
-          far={4}
-        />
 
         {/* Camera controls */}
         <OrbitControls
