@@ -99,24 +99,26 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
   }, [disabled]);
 
   return (
-    <div className="p-4 border-t border-gray-700 bg-gray-800/50">
+    <div className="p-3 bg-black">
       <div className="flex items-end gap-2">
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => handleInputChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onFocus={() => input.trim() && setUserTyping(true)}
-          onBlur={() => setUserTyping(false)}
-          placeholder="Type a message..."
-          disabled={disabled}
-          rows={1}
-          className="flex-1 resize-none bg-gray-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 placeholder-gray-400 disabled:opacity-50"
-        />
+        <div className="flex-1 relative">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onFocus={() => input.trim() && setUserTyping(true)}
+            onBlur={() => setUserTyping(false)}
+            placeholder="Type a message..."
+            disabled={disabled}
+            rows={1}
+            className="w-full resize-none bg-white text-black border-4 border-black px-4 py-3 text-sm focus:outline-none focus:border-pink-500 placeholder-gray-400 disabled:opacity-50 font-medium [clip-path:polygon(0_0,calc(100%-8px)_0,100%_8px,100%_100%,0_100%)]"
+          />
+        </div>
         <button
           onClick={handleSubmit}
           disabled={disabled || !input.trim()}
-          className="bg-gradient-to-r from-teal-400 to-cyan-400 text-white rounded-xl px-4 py-3 font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-white text-black border-4 border-black px-5 py-3 font-black text-sm uppercase tracking-wide hover:bg-pink-500 hover:text-white hover:border-pink-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%,0_8px)]"
         >
           Send
         </button>

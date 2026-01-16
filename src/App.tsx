@@ -4,19 +4,21 @@ import { SettingsModal, TitleBar } from './components/ui';
 
 function App() {
   return (
-    <div className="h-screen w-screen flex items-center bg-[#1a1a2e] overflow-hidden">
-      {/* Title bar for window controls */}
+    <div className="w-screen h-screen p-[5%] bg-[#1a1a2e]">
       <TitleBar />
 
-      {/* Main content area with character */}
-      <div className="flex-1 flex flex-col">
-        <CharacterCanvas />
+      <div className="w-full h-full flex flex-row">
+        {/* Character - 50% width */}
+        <div className="w-1/2 h-full">
+          <CharacterCanvas />
+        </div>
+
+        {/* Chat - 50% width */}
+        <div className="w-1/2 h-full">
+          <ChatPanel />
+        </div>
       </div>
 
-      {/* Chat panel on the right */}
-      <ChatPanel />
-
-      {/* Settings modal */}
       <SettingsModal />
     </div>
   );

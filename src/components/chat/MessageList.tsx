@@ -27,67 +27,69 @@ function ApiKeySetup() {
   };
 
   return (
-    <div className="bg-gray-800 rounded-xl p-4 mx-2">
-      <div className="text-center mb-4">
-        <p className="text-white text-sm font-medium">Welcome! Let's get you set up</p>
-        <p className="text-gray-400 text-xs mt-1">Choose your LLM provider and enter your API key</p>
-      </div>
+    <div className="bg-white border-4 border-black p-4 mx-2 transform -skew-x-1">
+      <div className="transform skew-x-1">
+        <div className="text-center mb-4">
+          <p className="text-black text-sm font-black uppercase">Welcome! Let's get you set up</p>
+          <p className="text-gray-600 text-xs mt-1">Choose your LLM provider and enter your API key</p>
+        </div>
 
-      <div className="space-y-3">
-        {/* Provider Selection */}
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Provider</label>
-          <select
-            value={settings.llmProvider}
-            onChange={(e) => handleProviderChange(e.target.value as LLMProviderType)}
-            className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+        <div className="space-y-3">
+          {/* Provider Selection */}
+          <div>
+            <label className="block text-xs text-black font-bold uppercase mb-1">Provider</label>
+            <select
+              value={settings.llmProvider}
+              onChange={(e) => handleProviderChange(e.target.value as LLMProviderType)}
+              className="w-full bg-gray-100 text-black border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+            >
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="gemini">Google Gemini</option>
+            </select>
+          </div>
+
+          {/* Model Selection */}
+          <div>
+            <label className="block text-xs text-black font-bold uppercase mb-1">Model</label>
+            <select
+              value={settings.llmModel}
+              onChange={(e) => updateSettings({ llmModel: e.target.value })}
+              className="w-full bg-gray-100 text-black border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+            >
+              {defaultModels[settings.llmProvider].map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* API Key Input */}
+          <div>
+            <label className="block text-xs text-black font-bold uppercase mb-1">API Key</label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder={`Enter your ${settings.llmProvider === 'openai' ? 'OpenAI' : settings.llmProvider === 'anthropic' ? 'Anthropic' : 'Gemini'} API key`}
+              className="w-full bg-gray-100 text-black border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 placeholder-gray-400"
+              onKeyDown={(e) => e.key === 'Enter' && handleSaveKey()}
+            />
+          </div>
+
+          <button
+            onClick={handleSaveKey}
+            disabled={!apiKey.trim()}
+            className="w-full bg-black text-white border-2 border-black py-2 font-black text-sm uppercase tracking-wide hover:bg-pink-500 hover:border-pink-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="gemini">Google Gemini</option>
-          </select>
+            Start Chatting
+          </button>
+
+          <p className="text-xs text-gray-500 text-center">
+            Your API key is stored locally and never sent to our servers.
+          </p>
         </div>
-
-        {/* Model Selection */}
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Model</label>
-          <select
-            value={settings.llmModel}
-            onChange={(e) => updateSettings({ llmModel: e.target.value })}
-            className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-          >
-            {defaultModels[settings.llmProvider].map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* API Key Input */}
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">API Key</label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder={`Enter your ${settings.llmProvider === 'openai' ? 'OpenAI' : settings.llmProvider === 'anthropic' ? 'Anthropic' : 'Gemini'} API key`}
-            className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 placeholder-gray-500"
-            onKeyDown={(e) => e.key === 'Enter' && handleSaveKey()}
-          />
-        </div>
-
-        <button
-          onClick={handleSaveKey}
-          disabled={!apiKey.trim()}
-          className="w-full bg-gradient-to-r from-teal-400 to-cyan-400 text-white rounded-lg py-2 font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Start Chatting
-        </button>
-
-        <p className="text-xs text-gray-500 text-center">
-          Your API key is stored locally and never sent to our servers.
-        </p>
       </div>
     </div>
   );
@@ -125,9 +127,11 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
       {showSetup ? (
         <ApiKeySetup />
       ) : messages.length === 0 ? (
-        <div className="text-center text-gray-400 py-8">
-          <p className="text-lg">Konnichiwa!</p>
-          <p className="text-sm mt-2">Say hi to start chatting!</p>
+        <div className="text-center py-8">
+          <div className="inline-block bg-white border-4 border-black px-6 py-4 transform -rotate-1">
+            <p className="text-black text-lg font-black uppercase">Konnichiwa!</p>
+            <p className="text-gray-600 text-sm mt-1">Say hi to start chatting!</p>
+          </div>
         </div>
       ) : null}
 
@@ -136,22 +140,26 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
           ? parseEmotionTag(message.content)
           : { text: message.content, emotion: null };
 
+        const isUser = message.role === 'user';
+
         return (
           <div
             key={message.id}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                message.role === 'user'
-                  ? 'bg-blue-500 text-white rounded-br-md'
-                  : 'bg-gradient-to-r from-teal-400 to-cyan-400 text-white rounded-bl-md'
+              className={`max-w-[85%] relative px-4 py-3 ${
+                isUser
+                  ? 'bg-slate-800 text-white border-2 border-slate-600 [clip-path:polygon(0_0,100%_0,100%_calc(100%-8px),calc(100%-8px)_100%,0_100%)]'
+                  : 'bg-white text-black border-4 border-black [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%,0_8px)]'
               }`}
             >
-              <p className="text-sm leading-relaxed">{text}</p>
+              <p className={`text-sm leading-relaxed ${isUser ? '' : 'font-medium'}`}>
+                {text}
+              </p>
               {emotion && (
-                <span className="text-xs opacity-70 mt-1 block">
-                  feeling {emotion}
+                <span className={`text-xs mt-1 block italic ${isUser ? 'text-slate-400' : 'text-gray-500'}`}>
+                  *{emotion}*
                 </span>
               )}
             </div>
@@ -161,11 +169,11 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
 
       {isTyping && (
         <div className="flex justify-start">
-          <div className="bg-gradient-to-r from-teal-400 to-cyan-400 text-white rounded-2xl rounded-bl-md px-4 py-2">
-            <div className="flex space-x-1">
-              <span className="animate-bounce delay-0">●</span>
-              <span className="animate-bounce delay-100">●</span>
-              <span className="animate-bounce delay-200">●</span>
+          <div className="bg-white text-black border-4 border-black px-4 py-3 [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%,0_8px)]">
+            <div className="flex space-x-2 items-center">
+              <span className="w-2 h-2 bg-black rounded-full animate-bounce" />
+              <span className="w-2 h-2 bg-black rounded-full animate-bounce [animation-delay:150ms]" />
+              <span className="w-2 h-2 bg-black rounded-full animate-bounce [animation-delay:300ms]" />
             </div>
           </div>
         </div>

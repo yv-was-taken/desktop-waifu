@@ -22,7 +22,7 @@ export function CharacterCanvas() {
   }
 
   return (
-    <div className="flex-1 w-full h-full flex items-center justify-center">
+    <div className="w-full h-full">
       <Canvas
         gl={{
           alpha: false,
@@ -35,7 +35,7 @@ export function CharacterCanvas() {
           near: 0.1,
           far: 1000,
         }}
-        style={{ background: '#1a1a2e', width: '100vw', height: '100vh'}}
+        className="bg-[#1a1a2e] w-full h-full"
       >
         {/* Background color */}
         <color attach="background" args={['#1a1a2e']} />
