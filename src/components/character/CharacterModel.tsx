@@ -36,8 +36,14 @@ export function CharacterModel({ config }: CharacterModelProps) {
     loader.register((parser) => new VRMLoaderPlugin(parser));
   });
 
-  // Load VRMA idle animation
-  const idleAnimationGltf = useLoader(GLTFLoader, '/animations/neutral_idle.vrma', (loader) => {
+  // Load all VRMA animations
+  const idleAnimGltf = useLoader(GLTFLoader, '/animations/neutral_idle.vrma', (loader) => {
+    loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
+  });
+  const thinkingAnimGltf = useLoader(GLTFLoader, '/animations/thinking.vrma', (loader) => {
+    loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
+  });
+  const talkingAnimGltf = useLoader(GLTFLoader, '/animations/talking.vrma', (loader) => {
     loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
   });
 
@@ -46,7 +52,7 @@ export function CharacterModel({ config }: CharacterModelProps) {
   const activeActionRef = useRef<THREE.AnimationAction | null>(null);
 
   useEffect(() => {
-    if (!gltf || !groupRef.current || !idleAnimationGltf) return;
+    if (!gltf || !groupRef.current || !idleAnimGltf || !thinkingAnimGltf || !talkingAnimGltf) return;
 
     // --- VRM Setup ---
     VRMUtils.removeUnnecessaryJoints(gltf.scene); // Clean up bones
@@ -73,11 +79,19 @@ export function CharacterModel({ config }: CharacterModelProps) {
     mixerRef.current = new THREE.AnimationMixer(vrm.scene);
     actionsRef.current = {};
 
-    // Load VRMA idle animation
-    const vrmAnimation = idleAnimationGltf.userData.vrmAnimations?.[0];
-    if (vrmAnimation) {
-      const clip = createVRMAnimationClip(vrmAnimation, vrm);
-      actionsRef.current['idle'] = mixerRef.current.clipAction(clip);
+    // Load all VRMA animations
+    const animationGltfs = {
+      idle: idleAnimGltf,
+      thinking: thinkingAnimGltf,
+      talking: talkingAnimGltf,
+    };
+
+    for (const [name, animGltf] of Object.entries(animationGltfs)) {
+      const vrmAnimation = animGltf.userData.vrmAnimations?.[0];
+      if (vrmAnimation) {
+        const clip = createVRMAnimationClip(vrmAnimation, vrm);
+        actionsRef.current[name] = mixerRef.current.clipAction(clip);
+      }
     }
 
     // Play idle animation
@@ -93,30 +107,21 @@ export function CharacterModel({ config }: CharacterModelProps) {
       mixerRef.current?.stopAllAction();
       VRMUtils.deepDispose(vrm.scene); // Dispose resources
     };
-  }, [gltf, idleAnimationGltf, config, setCharacterLoaded]);
+  }, [gltf, idleAnimGltf, thinkingAnimGltf, talkingAnimGltf, config, setCharacterLoaded]);
 
   // Handle animation state changes
   useEffect(() => {
     if (!modelLoaded || !mixerRef.current) return;
 
-    let animName: string | undefined;
-    switch (animationState) {
-      case 'talking':
-        animName = config.animations.talking?.[0];
-        break;
-      case 'idle':
-      default:
-        animName = config.animations.idle[0];
-        break;
-    }
+    // Map animation state to animation name
+    const animName = animationState === 'listening' ? 'idle' : animationState;
 
-    if (!animName || !actionsRef.current[animName]) {
+    if (!actionsRef.current[animName]) {
       // Fallback to idle if specific animation not found
-      animName = config.animations.idle[0];
-      if (!animName || !actionsRef.current[animName]) return; // No idle animation found
+      if (!actionsRef.current['idle']) return;
     }
 
-    const newAction = actionsRef.current[animName];
+    const newAction = actionsRef.current[animName] || actionsRef.current['idle'];
     const oldAction = activeActionRef.current;
 
     if (newAction !== oldAction) {
@@ -126,7 +131,7 @@ export function CharacterModel({ config }: CharacterModelProps) {
       newAction.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(0.3).play();
       activeActionRef.current = newAction;
     }
-  }, [animationState, modelLoaded, config.animations]);
+  }, [animationState, modelLoaded]);
 
   useFrame((_, delta) => {
     if (mixerRef.current) {
