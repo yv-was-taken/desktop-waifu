@@ -27,6 +27,7 @@ export interface CharacterConfig {
     emissiveMap?: string; // Made optional for VRM models
     scale: number;
     position: [number, number, number];
+    rotation?: [number, number, number];
   };
   accessories?: {
     id: string;

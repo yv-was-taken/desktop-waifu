@@ -62,7 +62,11 @@ export function CharacterModel({ config }: CharacterModelProps) {
     // Set model position, scale, and rotation
     vrm.scene.position.set(...config.model.position);
     vrm.scene.scale.setScalar(config.model.scale);
-    vrm.scene.rotation.y = Math.PI; // Rotate 180 degrees to face camera
+    if (config.model.rotation) {
+      vrm.scene.rotation.set(...config.model.rotation);
+    } else {
+      vrm.scene.rotation.y = Math.PI; // Rotate 180 degrees to face camera
+    }
 
     // Make the model cast and receive shadows
     vrm.scene.traverse((child) => {

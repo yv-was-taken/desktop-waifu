@@ -30,21 +30,21 @@ function createCharacter(id: string, name: string, overrides?: Partial<Character
 
 // All available characters
 export const characters: Record<string, Character> = {
-  alexandra: createCharacter('alexandra', 'Alexandra'),
-  alice: createCharacter('alice', 'Alice'),
+  alexandra: createCharacter('alexandra', 'Alexandra', { rotation: [0, 0, 0] }),
+  alice: createCharacter('alice', 'Alice', { rotation: [0, 0, 0] }),
   amanda: createCharacter('amanda', 'Amanda'),
   emily: createCharacter('emily', 'Emily'),
   grace: createCharacter('grace', 'Grace'),
-  jasmine: createCharacter('jasmine', 'Jasmine'),
-  jessica: createCharacter('jessica', 'Jessica'),
+  jasmine: createCharacter('jasmine', 'Jasmine', { rotation: [0, 0, 0] }),
+  jessica: createCharacter('jessica', 'Jessica', { rotation: [0, 0, 0] }),
   julia: createCharacter('julia', 'Julia'),
-  maria: createCharacter('maria', 'Maria'),
+  maria: createCharacter('maria', 'Maria', { rotation: [0, 0, 0] }),
   melissa: createCharacter('melissa', 'Melissa'),
   rose: createCharacter('rose', 'Rose'),
   sam: createCharacter('sam', 'Sam'),
-  sandra: createCharacter('sandra', 'Sandra'),
+  sandra: createCharacter('sandra', 'Sandra', { rotation: [0, 0, 0] }),
   sofia: createCharacter('sofia', 'Sofia'),
-  victoria: createCharacter('victoria', 'Victoria'),
+  victoria: createCharacter('victoria', 'Victoria', { rotation: [0, 0, 0] }),
 };
 
 export const getCharacter = (id: string): Character | undefined => {
