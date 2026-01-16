@@ -3,7 +3,7 @@ import { MessageList } from './MessageList';
 import { InputArea } from './InputArea';
 import { useAppStore } from '../../store';
 import { getProvider } from '../../lib/llm';
-import { characters, defaultCharacterId } from '../../characters';
+import { buildSystemPrompt } from '../../lib/personalities';
 import type { LLMMessage } from '../../types';
 
 export function ChatPanel() {
@@ -16,8 +16,6 @@ export function ChatPanel() {
   const setTalking = useAppStore((state) => state.setTalking);
   const toggleSettings = useAppStore((state) => state.toggleSettings);
   const clearMessages = useAppStore((state) => state.clearMessages);
-
-  const character = characters[defaultCharacterId];
 
   const handleSend = useCallback(async (content: string) => {
     if (!settings.apiKey) {
@@ -34,9 +32,17 @@ export function ChatPanel() {
     try {
       const provider = getProvider(settings.llmProvider);
 
+      // Build system prompt from personality settings
+      const systemPrompt = buildSystemPrompt({
+        selectedPersonality: settings.selectedPersonality,
+        detailLevel: settings.detailLevel,
+        assistantSubject: settings.assistantSubject,
+        customSubject: settings.customSubject,
+      });
+
       // Build messages array with system prompt
       const llmMessages: LLMMessage[] = [
-        { role: 'system', content: character?.systemPrompt ?? '' },
+        { role: 'system', content: systemPrompt },
         ...messages.map((m) => ({
           role: m.role as 'user' | 'assistant',
           content: m.content,
@@ -47,7 +53,7 @@ export function ChatPanel() {
       const response = await provider.chat(llmMessages, {
         apiKey: settings.apiKey,
         model: settings.llmModel,
-        maxTokens: 500,
+        maxTokens: 4096,
         temperature: 0.8,
       });
 
@@ -88,7 +94,7 @@ export function ChatPanel() {
         setExpression('neutral');
       }, 3000);
     }
-  }, [settings, messages, character, addMessage, setThinking, setExpression, setTalking]);
+  }, [settings, messages, addMessage, setThinking, setExpression, setTalking]);
 
   return (
     <div className="w-full h-full flex flex-col bg-slate-900/90 border-l-4 border-black">

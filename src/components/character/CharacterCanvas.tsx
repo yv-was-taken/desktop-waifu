@@ -3,7 +3,8 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { EffectComposer, Outline } from '@react-three/postprocessing';
 import { CharacterModel } from './CharacterModel';
-import { characters, defaultCharacterId } from '../../characters';
+import { characters } from '../../characters';
+import { useAppStore } from '../../store';
 
 function LoadingFallback() {
   return (
@@ -15,7 +16,8 @@ function LoadingFallback() {
 }
 
 export function CharacterCanvas() {
-  const character = characters[defaultCharacterId];
+  const selectedCharacter = useAppStore((state) => state.settings.selectedCharacter);
+  const character = characters[selectedCharacter];
 
   if (!character) {
     return <div className="flex-1 flex items-center justify-center text-white">Character not found</div>;
@@ -54,8 +56,8 @@ export function CharacterCanvas() {
           <EffectComposer autoClear={false}>
             <Outline
               blur
-              visibleEdgeColor="white"
-              hiddenEdgeColor="white"
+              visibleEdgeColor={0xffffff}
+              hiddenEdgeColor={0xffffff}
               edgeStrength={100}
               width={1000}
             />

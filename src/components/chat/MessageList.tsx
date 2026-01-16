@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { ChatMessage, LLMProviderType } from '../../types';
 import { useAppStore } from '../../store';
 import { defaultModels } from '../../lib/llm';
@@ -122,7 +126,7 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
   return (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto p-4 space-y-4 chat-scroll"
+      className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 chat-scroll"
     >
       {showSetup ? (
         <ApiKeySetup />
@@ -154,9 +158,33 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
                   : 'bg-white text-black border-4 border-black [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%,0_8px)]'
               }`}
             >
-              <p className={`text-sm leading-relaxed ${isUser ? '' : 'font-medium'}`}>
-                {text}
-              </p>
+              <div className={`text-sm leading-relaxed break-words prose prose-sm max-w-none ${isUser ? 'prose-invert' : 'prose-slate'}`}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code({ className, children, ...props }) {
+                      const match = /language-(\w+)/.exec(className || '');
+                      const isInline = !match && !className;
+                      return isInline ? (
+                        <code className={`${isUser ? 'bg-slate-700' : 'bg-gray-200'} px-1 py-0.5 rounded text-xs`} {...props}>
+                          {children}
+                        </code>
+                      ) : (
+                        <SyntaxHighlighter
+                          style={oneDark}
+                          language={match?.[1] || 'text'}
+                          PreTag="div"
+                          className="rounded-md text-xs !my-2"
+                        >
+                          {String(children).replace(/\n$/, '')}
+                        </SyntaxHighlighter>
+                      );
+                    },
+                  }}
+                >
+                  {text}
+                </ReactMarkdown>
+              </div>
               {emotion && (
                 <span className={`text-xs mt-1 block italic ${isUser ? 'text-slate-400' : 'text-gray-500'}`}>
                   *{emotion}*

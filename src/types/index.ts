@@ -59,3 +59,37 @@ export interface AppSettings {
   alwaysOnTop: boolean;
   characterScale: number;
 }
+
+// Personality Types
+export type PersonalityId =
+  | 'naive-girlfriend'
+  | 'smart-girlfriend'
+  | 'friend'
+  | 'tutor'
+  | 'life-coach'
+  | 'creative-partner'
+  | 'assistant';
+
+export type DetailLevel = 'concise' | 'balanced' | 'detailed';
+
+export interface SubjectOption {
+  id: string;
+  name: string;
+}
+
+export interface Personality {
+  id: PersonalityId;
+  name: string;
+  description: string;
+  traits: string;
+  speechStyle: string;
+  requiresSubject?: boolean;
+  predefinedSubjects?: SubjectOption[];
+}
+
+export interface PersonalitySettings {
+  selectedPersonality: PersonalityId;
+  detailLevel: DetailLevel;
+  assistantSubject?: string;
+  customSubject?: string;
+}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useFrame, useLoader } from '@react-three/fiber';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { GLTFLoader, type GLTFParser } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, VRM } from '@pixiv/three-vrm';
 import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-vrm-animation';
 import * as THREE from 'three';
@@ -33,18 +33,18 @@ export function CharacterModel({ config }: CharacterModelProps) {
 
   // Load VRM model
   const gltf = useLoader(GLTFLoader, config.model.path, (loader) => {
-    loader.register((parser) => new VRMLoaderPlugin(parser));
+    loader.register((parser: GLTFParser) => new VRMLoaderPlugin(parser));
   });
 
   // Load all VRMA animations
   const idleAnimGltf = useLoader(GLTFLoader, '/animations/neutral_idle.vrma', (loader) => {
-    loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
+    loader.register((parser: GLTFParser) => new VRMAnimationLoaderPlugin(parser));
   });
   const thinkingAnimGltf = useLoader(GLTFLoader, '/animations/thinking.vrma', (loader) => {
-    loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
+    loader.register((parser: GLTFParser) => new VRMAnimationLoaderPlugin(parser));
   });
   const talkingAnimGltf = useLoader(GLTFLoader, '/animations/talking.vrma', (loader) => {
-    loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
+    loader.register((parser: GLTFParser) => new VRMAnimationLoaderPlugin(parser));
   });
 
   // Store animation actions

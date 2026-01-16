@@ -1,13 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ChatMessage, LLMProviderType } from '../types';
-
-// Valid models for each provider - keep in sync with lib/llm/index.ts
-const validModels: Record<LLMProviderType, string[]> = {
-  openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo'],
-  anthropic: ['claude-sonnet-4-5-20250514', 'claude-opus-4-5-20251101', 'claude-3-haiku-20240307'],
-  gemini: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'],
-};
+import type { ChatMessage, LLMProviderType, PersonalityId, DetailLevel } from '../types';
 
 interface CharacterState {
   isLoaded: boolean;
@@ -29,6 +22,13 @@ interface SettingsState {
   alwaysOnTop: boolean;
   characterScale: number;
   showSettings: boolean;
+  // Character selection
+  selectedCharacter: string;
+  // Personality settings
+  selectedPersonality: PersonalityId;
+  detailLevel: DetailLevel;
+  assistantSubject: string;
+  customSubject: string;
 }
 
 interface AppState {
@@ -120,6 +120,13 @@ export const useAppStore = create<AppState>()(
         alwaysOnTop: true,
         characterScale: 1.0,
         showSettings: false,
+        // Character selection
+        selectedCharacter: 'emily',
+        // Personality defaults
+        selectedPersonality: 'naive-girlfriend',
+        detailLevel: 'balanced',
+        assistantSubject: 'programming',
+        customSubject: '',
       },
       updateSettings: (newSettings) =>
         set((state) => ({
@@ -132,7 +139,6 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'desktop-waifu-storage',
-      version: 1,
       partialize: (state) => ({
         settings: {
           llmProvider: state.settings.llmProvider,
@@ -140,24 +146,13 @@ export const useAppStore = create<AppState>()(
           apiKey: state.settings.apiKey,
           alwaysOnTop: state.settings.alwaysOnTop,
           characterScale: state.settings.characterScale,
+          selectedCharacter: state.settings.selectedCharacter,
+          selectedPersonality: state.settings.selectedPersonality,
+          detailLevel: state.settings.detailLevel,
+          assistantSubject: state.settings.assistantSubject,
+          customSubject: state.settings.customSubject,
         },
       }),
-      migrate: (persistedState: unknown, _version: number) => {
-        const state = persistedState as { settings?: { llmProvider?: LLMProviderType; llmModel?: string } };
-
-        if (state?.settings) {
-          const provider = state.settings.llmProvider ?? 'gemini';
-          const model = state.settings.llmModel ?? '';
-
-          // Check if the stored model is valid for the provider
-          if (!validModels[provider]?.includes(model)) {
-            // Default to first valid model (free/cheapest option)
-            state.settings.llmModel = validModels[provider]?.[0] ?? 'gemini-2.5-flash';
-          }
-        }
-
-        return state;
-      },
     }
   )
 );

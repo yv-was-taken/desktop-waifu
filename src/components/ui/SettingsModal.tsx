@@ -1,6 +1,8 @@
 import { useAppStore } from '../../store';
 import { defaultModels } from '../../lib/llm';
-import type { LLMProviderType } from '../../types';
+import { personalities } from '../../lib/personalities';
+import { characters } from '../../characters';
+import type { LLMProviderType, PersonalityId, DetailLevel } from '../../types';
 
 export function SettingsModal() {
   const settings = useAppStore((state) => state.settings);
@@ -38,7 +40,7 @@ export function SettingsModal() {
             <select
               value={settings.llmProvider}
               onChange={(e) => handleProviderChange(e.target.value as LLMProviderType)}
-              className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+              className="w-full bg-gray-700 text-black rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
             >
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic</option>
@@ -52,7 +54,7 @@ export function SettingsModal() {
             <select
               value={settings.llmModel}
               onChange={(e) => updateSettings({ llmModel: e.target.value })}
-              className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+              className="w-full bg-gray-700 text-black rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
             >
               {defaultModels[settings.llmProvider].map((model) => (
                 <option key={model} value={model}>
@@ -70,11 +72,114 @@ export function SettingsModal() {
               value={settings.apiKey}
               onChange={(e) => updateSettings({ apiKey: e.target.value })}
               placeholder="Enter your API key"
-              className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 placeholder-gray-400"
+              className="w-full bg-gray-700 text-black rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 placeholder-gray-400"
             />
             <p className="text-xs text-gray-500 mt-1">
               Your API key is stored locally and never sent to our servers.
             </p>
+          </div>
+
+          {/* Personality Section Divider */}
+          <div className="pt-2">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-700 pb-2">
+              Personality & Behavior
+            </div>
+          </div>
+
+          {/* Personality Selection */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">Personality</label>
+            <select
+              value={settings.selectedPersonality}
+              onChange={(e) => updateSettings({ selectedPersonality: e.target.value as PersonalityId })}
+              className="w-full bg-gray-700 text-black rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            >
+              {Object.values(personalities).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {personalities[settings.selectedPersonality].description}
+            </p>
+          </div>
+
+          {/* Detail Level */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">Response Detail</label>
+            <div className="flex gap-2">
+              {(['concise', 'balanced', 'detailed'] as DetailLevel[]).map((level) => (
+                <button
+                  key={level}
+                  onClick={() => updateSettings({ detailLevel: level })}
+                  className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    settings.detailLevel === level
+                      ? 'bg-teal-400 text-gray-900'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  {level.charAt(0).toUpperCase() + level.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Subject Selection (for Assistant mode) */}
+          {settings.selectedPersonality === 'assistant' && (
+            <div>
+              <label className="block text-sm text-gray-300 mb-2">Subject Expertise</label>
+              <select
+                value={settings.customSubject ? 'custom' : settings.assistantSubject}
+                onChange={(e) => {
+                  if (e.target.value === 'custom') {
+                    updateSettings({ customSubject: settings.customSubject || '' });
+                  } else {
+                    updateSettings({ assistantSubject: e.target.value, customSubject: '' });
+                  }
+                }}
+                className="w-full bg-gray-700 text-black rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+              >
+                {personalities.assistant.predefinedSubjects?.map((subject) => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </option>
+                ))}
+                <option value="custom">Custom Subject...</option>
+              </select>
+              {(settings.customSubject || settings.assistantSubject === 'custom') && (
+                <input
+                  type="text"
+                  value={settings.customSubject}
+                  onChange={(e) => updateSettings({ customSubject: e.target.value })}
+                  placeholder="Enter custom subject area..."
+                  className="w-full mt-2 bg-gray-700 text-black rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 placeholder-gray-400"
+                />
+              )}
+            </div>
+          )}
+
+          {/* Display Section Divider */}
+          <div className="pt-2">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-700 pb-2">
+              Display
+            </div>
+          </div>
+
+          {/* Character Selection */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">Character</label>
+            <select
+              value={settings.selectedCharacter}
+              onChange={(e) => updateSettings({ selectedCharacter: e.target.value })}
+              className="w-full bg-gray-700 text-black rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            >
+              {Object.values(characters).map((c) => (
+                <option key={c.config.id} value={c.config.id}>
+                  {c.config.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Character Scale */}

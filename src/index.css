@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
@@ -48,4 +49,55 @@ html, body, #root {
 
 .no-drag {
   -webkit-app-region: no-drag;
+}
+
+/* Dropdown options need dark text for native browser rendering */
+select option {
+  color: black;
+}
+
+/* Markdown styling in chat messages */
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  margin-top: 0.75em;
+  margin-bottom: 0.25em;
+}
+
+.prose h1:first-child, .prose h2:first-child, .prose h3:first-child {
+  margin-top: 0;
+}
+
+.prose p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose p:first-child {
+  margin-top: 0;
+}
+
+.prose p:last-child {
+  margin-bottom: 0;
+}
+
+.prose ul, .prose ol {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding-left: 1.25em;
+}
+
+.prose li {
+  margin-top: 0.125em;
+  margin-bottom: 0.125em;
+}
+
+.prose pre {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose blockquote {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding-left: 0.75em;
+  border-left-width: 3px;
 }
