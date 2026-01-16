@@ -30,8 +30,8 @@ export function CharacterCanvas() {
           powerPreference: 'high-performance',
         }}
         camera={{
-          position: [0, 5, 10],
-          fov: 60,
+          position: [0, -0.3, 3],
+          fov: 30,
           near: 0.1,
           far: 1000,
         }}
@@ -67,11 +67,11 @@ export function CharacterCanvas() {
         <OrbitControls
           enablePan={true}
           enableZoom={true}
-          minDistance={2}
-          maxDistance={80}
+          minDistance={1}
+          maxDistance={10}
           minPolarAngle={Math.PI / 6}
           maxPolarAngle={Math.PI / 2}
-          target={[0, 5, -5]}
+          target={[0, -0.3, 0]}
         />
       </Canvas>
     </div>

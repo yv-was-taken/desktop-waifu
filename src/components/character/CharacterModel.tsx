@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { useFBX, useTexture } from '@react-three/drei';
+import { useFrame, useLoader } from '@react-three/fiber';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { VRMLoaderPlugin, VRMUtils, VRM } from '@pixiv/three-vrm';
 import * as THREE from 'three';
 import type { CharacterConfig } from '../../types';
 import { useAppStore } from '../../store';
@@ -13,8 +14,10 @@ interface CharacterModelProps {
 
 export function CharacterModel({ config }: CharacterModelProps) {
   const groupRef = useRef<THREE.Group>(null);
+  const vrmRef = useRef<VRM | null>(null);
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
+  const clockRef = useRef(0);
 
   const setCharacterLoaded = useAppStore((state) => state.setCharacterLoaded);
   const isUserTyping = useAppStore((state) => state.chat.isUserTyping);
@@ -28,148 +31,103 @@ export function CharacterModel({ config }: CharacterModelProps) {
     return 'idle';
   }, [isTalking, isThinking, isUserTyping]);
 
-  // Load FBX model and textures from config
-  const fbx = useFBX(config.model.path);
-  const [texture, emissiveMap] = useTexture(
-    [config.model.texture, config.model.emissiveMap].filter(Boolean) as string[]
-  );
+  // Load VRM model
+  const gltf = useLoader(GLTFLoader, config.model.path, (loader) => {
+    loader.register((parser) => new VRMLoaderPlugin(parser));
+  });
+
+  // Store animation actions
+  const actionsRef = useRef<{ [key: string]: THREE.AnimationAction }>({});
+  const activeActionRef = useRef<THREE.AnimationAction | null>(null);
 
   useEffect(() => {
-    if (!fbx || !texture || !groupRef.current) return;
+    if (!gltf || !groupRef.current) return;
 
-    // Clone the model
-    const model = fbx.clone();
+    // --- VRM Setup ---
+    VRMUtils.removeUnnecessaryJoints(gltf.scene); // Clean up bones
+    const vrm = gltf.userData.vrm as VRM;
+    vrmRef.current = vrm;
 
-    // Log bounding box
-    const box = new THREE.Box3().setFromObject(model);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    console.log('Model size (x, y, z):', size.x, size.y, size.z);
+    // Set model position, scale, and rotation
+    vrm.scene.position.set(...config.model.position);
+    vrm.scene.scale.setScalar(config.model.scale);
+    vrm.scene.rotation.y = Math.PI; // Rotate 180 degrees to face camera
 
-    // Configure textures
-    texture.flipY = false;
-    texture.colorSpace = THREE.SRGBColorSpace;
-    if (emissiveMap) {
-      emissiveMap.flipY = false;
-      emissiveMap.colorSpace = THREE.SRGBColorSpace;
-    }
-
-    // Scale and position
-    model.scale.setScalar(config.model.scale);
-    model.position.set(...config.model.position);
-
-    // Apply texture to all meshes
-    let meshCount = 0;
-    model.traverse((child) => {
+    // Make the model cast and receive shadows
+    vrm.scene.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        meshCount++;
         child.castShadow = true;
         child.receiveShadow = true;
-        child.frustumCulled = false;
-
-        // Create new material with the texture
-        const materialConfig: THREE.MeshToonMaterialParameters = {
-          map: texture,
-          side: THREE.DoubleSide,
-          transparent: true,
-          alphaTest: 0.5,
-        };
-
-        if (emissiveMap) {
-          materialConfig.emissiveMap = emissiveMap;
-          materialConfig.emissive = new THREE.Color(0xffffff);
-          materialConfig.emissiveIntensity = 2;
-        }
-
-        const newMaterial = new THREE.MeshToonMaterial(materialConfig);
-
-        child.material = newMaterial;
       }
     });
-    console.log('Applied texture to', meshCount, 'meshes');
 
-    // Clear and add model
-    while (groupRef.current.children.length > 0) {
-      groupRef.current.remove(groupRef.current.children[0]);
+    groupRef.current.clear();
+    groupRef.current.add(vrm.scene);
+
+    // --- Animation Setup ---
+    mixerRef.current = vrm.mixer; // Use VRM's internal mixer
+    actionsRef.current = {};
+
+    // Collect animation clips from gltf.animations
+    for (const clip of gltf.animations) {
+      actionsRef.current[clip.name] = mixerRef.current.clipAction(clip);
     }
-    groupRef.current.add(model);
 
-    // Animation mixer
-    mixerRef.current = new THREE.AnimationMixer(model);
+    // Play initial animation
+    const initialAnimName = config.animations.idle[0];
+    if (initialAnimName && actionsRef.current[initialAnimName]) {
+      activeActionRef.current = actionsRef.current[initialAnimName];
+      activeActionRef.current.play();
+    }
 
     setModelLoaded(true);
     setCharacterLoaded(true);
 
     return () => {
       mixerRef.current?.stopAllAction();
+      VRMUtils.deepDispose(vrm.scene); // Dispose resources
     };
-  }, [fbx, texture, emissiveMap, config, setCharacterLoaded]);
+  }, [gltf, config, setCharacterLoaded]);
 
-  const getAnimationParams = (state: AnimationState, time: number) => {
-    switch (state) {
-      case 'idle':
-        return {
-          posY: Math.sin(time * 0.5) * 0.03,
-          rotY: Math.sin(time * 0.3) * 0.02,
-          rotX: 0,
-          rotZ: Math.sin(time * 0.4) * 0.01,
-          scale: 1,
-        };
-      case 'listening':
-        return {
-          posY: Math.sin(time * 0.8) * 0.02 + 0.02,
-          rotY: Math.sin(time * 0.5) * 0.03,
-          rotX: -0.05,
-          rotZ: Math.sin(time * 0.6) * 0.02,
-          scale: 1,
-        };
-      case 'thinking':
-        return {
-          posY: Math.sin(time * 0.3) * 0.02,
-          rotY: Math.sin(time * 0.2) * 0.05 + 0.1,
-          rotX: Math.sin(time * 0.4) * 0.02,
-          rotZ: 0.05 + Math.sin(time * 0.3) * 0.02,
-          scale: 1,
-        };
+  // Handle animation state changes
+  useEffect(() => {
+    if (!modelLoaded || !mixerRef.current) return;
+
+    let animName: string | undefined;
+    switch (animationState) {
       case 'talking':
-        return {
-          posY: Math.sin(time * 1.2) * 0.04 + Math.sin(time * 2.5) * 0.01,
-          rotY: Math.sin(time * 0.8) * 0.08,
-          rotX: Math.sin(time * 1.5) * 0.02,
-          rotZ: Math.sin(time * 1.0) * 0.03,
-          scale: 1 + Math.sin(time * 3) * 0.005,
-        };
+        animName = config.animations.talking?.[0];
+        break;
+      case 'idle':
       default:
-        return { posY: 0, rotY: 0, rotX: 0, rotZ: 0, scale: 1 };
+        animName = config.animations.idle[0];
+        break;
     }
-  };
 
-  const currentParamsRef = useRef({ posY: 0, rotY: 0, rotX: 0, rotZ: 0, scale: 1 });
-  const transitionSpeed = 0.08;
+    if (!animName || !actionsRef.current[animName]) {
+      // Fallback to idle if specific animation not found
+      animName = config.animations.idle[0];
+      if (!animName || !actionsRef.current[animName]) return; // No idle animation found
+    }
+
+    const newAction = actionsRef.current[animName];
+    const oldAction = activeActionRef.current;
+
+    if (newAction !== oldAction) {
+      if (oldAction) {
+        oldAction.fadeOut(0.3);
+      }
+      newAction.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(0.3).play();
+      activeActionRef.current = newAction;
+    }
+  }, [animationState, modelLoaded, config.animations]);
 
   useFrame((_, delta) => {
-    if (mixerRef.current) {
-      mixerRef.current.update(delta);
-    }
-
-    if (groupRef.current && modelLoaded) {
-      const time = Date.now() * 0.001;
-      const targetParams = getAnimationParams(animationState, time);
-      const current = currentParamsRef.current;
-
-      current.posY += (targetParams.posY - current.posY) * transitionSpeed;
-      current.rotY += (targetParams.rotY - current.rotY) * transitionSpeed;
-      current.rotX += (targetParams.rotX - current.rotX) * transitionSpeed;
-      current.rotZ += (targetParams.rotZ - current.rotZ) * transitionSpeed;
-      current.scale += (targetParams.scale - current.scale) * transitionSpeed;
-
-      groupRef.current.position.y = config.model.position[1] + current.posY;
-      groupRef.current.rotation.y = current.rotY;
-      groupRef.current.rotation.x = current.rotX;
-      groupRef.current.rotation.z = current.rotZ;
-      groupRef.current.scale.setScalar(config.model.scale * current.scale);
+    if (vrmRef.current) {
+      vrmRef.current.update(delta); // Update VRM, which also updates its mixer
     }
   });
 
   return <group ref={groupRef} />;
 }
+

@@ -23,8 +23,8 @@ export interface CharacterConfig {
   name: string;
   model: {
     path: string;
-    texture: string;
-    emissiveMap?: string;
+    texture?: string; // Made optional for VRM models
+    emissiveMap?: string; // Made optional for VRM models
     scale: number;
     position: [number, number, number];
   };
