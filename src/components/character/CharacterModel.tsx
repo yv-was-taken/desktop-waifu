@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { useFrame, useLoader } from '@react-three/fiber';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { VRMLoaderPlugin, VRMUtils, VRM } from '@pixiv/three-vrm';
+import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-vrm-animation';
 import * as THREE from 'three';
 import type { CharacterConfig } from '../../types';
 import { useAppStore } from '../../store';
@@ -17,7 +18,6 @@ export function CharacterModel({ config }: CharacterModelProps) {
   const vrmRef = useRef<VRM | null>(null);
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
-  const clockRef = useRef(0);
 
   const setCharacterLoaded = useAppStore((state) => state.setCharacterLoaded);
   const isUserTyping = useAppStore((state) => state.chat.isUserTyping);
@@ -36,12 +36,17 @@ export function CharacterModel({ config }: CharacterModelProps) {
     loader.register((parser) => new VRMLoaderPlugin(parser));
   });
 
+  // Load VRMA idle animation
+  const idleAnimationGltf = useLoader(GLTFLoader, '/animations/neutral_idle.vrma', (loader) => {
+    loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
+  });
+
   // Store animation actions
   const actionsRef = useRef<{ [key: string]: THREE.AnimationAction }>({});
   const activeActionRef = useRef<THREE.AnimationAction | null>(null);
 
   useEffect(() => {
-    if (!gltf || !groupRef.current) return;
+    if (!gltf || !groupRef.current || !idleAnimationGltf) return;
 
     // --- VRM Setup ---
     VRMUtils.removeUnnecessaryJoints(gltf.scene); // Clean up bones
@@ -65,18 +70,19 @@ export function CharacterModel({ config }: CharacterModelProps) {
     groupRef.current.add(vrm.scene);
 
     // --- Animation Setup ---
-    mixerRef.current = vrm.mixer; // Use VRM's internal mixer
+    mixerRef.current = new THREE.AnimationMixer(vrm.scene);
     actionsRef.current = {};
 
-    // Collect animation clips from gltf.animations
-    for (const clip of gltf.animations) {
-      actionsRef.current[clip.name] = mixerRef.current.clipAction(clip);
+    // Load VRMA idle animation
+    const vrmAnimation = idleAnimationGltf.userData.vrmAnimations?.[0];
+    if (vrmAnimation) {
+      const clip = createVRMAnimationClip(vrmAnimation, vrm);
+      actionsRef.current['idle'] = mixerRef.current.clipAction(clip);
     }
 
-    // Play initial animation
-    const initialAnimName = config.animations.idle[0];
-    if (initialAnimName && actionsRef.current[initialAnimName]) {
-      activeActionRef.current = actionsRef.current[initialAnimName];
+    // Play idle animation
+    if (actionsRef.current['idle']) {
+      activeActionRef.current = actionsRef.current['idle'];
       activeActionRef.current.play();
     }
 
@@ -87,7 +93,7 @@ export function CharacterModel({ config }: CharacterModelProps) {
       mixerRef.current?.stopAllAction();
       VRMUtils.deepDispose(vrm.scene); // Dispose resources
     };
-  }, [gltf, config, setCharacterLoaded]);
+  }, [gltf, idleAnimationGltf, config, setCharacterLoaded]);
 
   // Handle animation state changes
   useEffect(() => {
@@ -123,8 +129,11 @@ export function CharacterModel({ config }: CharacterModelProps) {
   }, [animationState, modelLoaded, config.animations]);
 
   useFrame((_, delta) => {
+    if (mixerRef.current) {
+      mixerRef.current.update(delta); // Update animation mixer
+    }
     if (vrmRef.current) {
-      vrmRef.current.update(delta); // Update VRM, which also updates its mixer
+      vrmRef.current.update(delta); // Update VRM (expressions, look-at, etc.)
     }
   });
 
