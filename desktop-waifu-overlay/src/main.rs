@@ -59,11 +59,11 @@ fn main() -> Result<()> {
 }
 
 fn build_ui(app: &Application) {
-    // Create the main window (wide enough for character + chat panel side by side)
+    // Create the main window (start with character-only width, expands when chat opens)
     let window = ApplicationWindow::builder()
         .application(app)
         .title("Desktop Waifu Overlay")
-        .default_width(740)
+        .default_width(240)
         .default_height(600)
         .build();
 
@@ -216,6 +216,9 @@ fn create_webview_with_handlers(
     // Register the "windowControl" message handler for hide/show
     content_manager.register_script_message_handler("windowControl", None);
 
+    // Register the "resizeWindow" message handler for dynamic width adjustment
+    content_manager.register_script_message_handler("resizeWindow", None);
+
     // Clone window for the closure
     let window_clone = window.clone();
 
@@ -306,6 +309,27 @@ fn create_webview_with_handlers(
                         if let Some(ref handle) = tray_handle {
                             update_tray_visibility(handle, true);
                         }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    });
+
+    // Clone window for resizeWindow handler
+    let window_for_resize = window.clone();
+
+    // Connect to the script-message-received signal for window resize
+    content_manager.connect_script_message_received(Some("resizeWindow"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let action = parsed["action"].as_str().unwrap_or("");
+
+                match action {
+                    "resize" => {
+                        let width = parsed["width"].as_i64().unwrap_or(740) as i32;
+                        info!("WebView requested resize to width: {}", width);
+                        window_for_resize.set_default_width(width);
                     }
                     _ => {}
                 }

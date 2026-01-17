@@ -14,10 +14,16 @@ declare global {
       messageHandlers?: {
         moveWindow?: { postMessage: (msg: { action: string; offsetX?: number; offsetY?: number }) => void };
         windowControl?: { postMessage: (msg: { action: 'hide' | 'show' }) => void };
+        resizeWindow?: { postMessage: (msg: { action: 'resize'; width: number }) => void };
       };
     };
   }
 }
+
+// Window width constants
+const WINDOW_WIDTH_COLLAPSED = 240;  // Character only
+const WINDOW_WIDTH_EXPANDED = 740;   // Chat + Character
+const CHAT_ANIMATION_DURATION = 300; // ms (matches CSS transition)
 
 // Helper to send window move messages to the Rust backend via WebKit
 function sendMoveMessage(message: { action: string; offsetX?: number; offsetY?: number }) {
@@ -27,6 +33,11 @@ function sendMoveMessage(message: { action: string; offsetX?: number; offsetY?: 
 // Helper to send window control messages (hide/show) to Rust backend
 function sendWindowControlMessage(message: { action: 'hide' | 'show' }) {
   window.webkit?.messageHandlers?.windowControl?.postMessage(message);
+}
+
+// Helper to send window resize messages to Rust backend
+function sendResizeMessage(width: number) {
+  window.webkit?.messageHandlers?.resizeWindow?.postMessage({ action: 'resize', width });
 }
 
 // Double-click timing threshold in milliseconds
@@ -65,6 +76,20 @@ function OverlayMode() {
     window.addEventListener('trayShow', handleTrayShow);
     return () => window.removeEventListener('trayShow', handleTrayShow);
   }, [setHiding]);
+
+  // Resize window based on chat panel state
+  useEffect(() => {
+    if (chatPanelOpen) {
+      // Opening: resize immediately (expand first), then chat slides in
+      sendResizeMessage(WINDOW_WIDTH_EXPANDED);
+    } else {
+      // Closing: wait for slide-out animation to complete, then resize
+      const timer = setTimeout(() => {
+        sendResizeMessage(WINDOW_WIDTH_COLLAPSED);
+      }, CHAT_ANIMATION_DURATION);
+      return () => clearTimeout(timer);
+    }
+  }, [chatPanelOpen]);
 
   // Trigger hide sequence: set hiding state, wait for animation, then tell Rust to hide
   const triggerHide = useCallback(() => {
@@ -154,29 +179,35 @@ function OverlayMode() {
 
   return (
     <div
-      className="w-screen h-screen flex flex-row"
+      className="w-screen h-screen relative overflow-hidden"
       style={{ background: 'transparent' }}
     >
-      {/* Chat panel area - fixed width on left, content slides in */}
-      <div className="w-[500px] h-full flex-shrink-0 overflow-hidden">
-        <div
-          className="w-[500px] h-full bg-[#1a1a2e] flex flex-col transition-transform duration-300 ease-in-out"
-          style={{ transform: chatPanelOpen ? 'translateX(0)' : 'translateX(-100%)' }}
-        >
-          <ChatPanel onClose={() => setChatPanelOpen(false)} />
-        </div>
-      </div>
-
-      {/* Character canvas - draggable, click toggles panel, double-click hides */}
+      {/* Content anchored to right edge - character always visible, chat expands left */}
       <div
-        ref={dragElementRef}
-        className="w-[240px] h-full cursor-grab active:cursor-grabbing flex-shrink-0 transition-transform duration-700 ease-in"
-        style={{ transform: isHiding ? 'translateX(100%)' : 'translateX(0)' }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
+        className="absolute right-0 top-0 h-full flex flex-row"
+        style={{ width: WINDOW_WIDTH_EXPANDED }}
       >
-        <CharacterCanvas disableControls />
+        {/* Chat panel area - fixed width on left, content slides in */}
+        <div className="w-[500px] h-full flex-shrink-0 overflow-hidden">
+          <div
+            className="w-[500px] h-full bg-[#1a1a2e] flex flex-col transition-transform duration-300 ease-in-out"
+            style={{ transform: chatPanelOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+          >
+            <ChatPanel onClose={() => setChatPanelOpen(false)} />
+          </div>
+        </div>
+
+        {/* Character canvas - draggable, click toggles panel, double-click hides */}
+        <div
+          ref={dragElementRef}
+          className="w-[240px] h-full cursor-grab active:cursor-grabbing flex-shrink-0 transition-transform duration-700 ease-in"
+          style={{ transform: isHiding ? 'translateX(100%)' : 'translateX(0)' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+        >
+          <CharacterCanvas disableControls />
+        </div>
       </div>
 
       <SettingsModal />
