@@ -31,6 +31,10 @@ interface SettingsState {
   customSubject: string;
 }
 
+interface UIState {
+  chatPanelOpen: boolean;
+}
+
 interface AppState {
   // Character
   character: CharacterState;
@@ -50,6 +54,11 @@ interface AppState {
   settings: SettingsState;
   updateSettings: (settings: Partial<SettingsState>) => void;
   toggleSettings: () => void;
+
+  // UI (overlay mode)
+  ui: UIState;
+  setChatPanelOpen: (open: boolean) => void;
+  toggleChatPanel: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -135,6 +144,19 @@ export const useAppStore = create<AppState>()(
       toggleSettings: () =>
         set((state) => ({
           settings: { ...state.settings, showSettings: !state.settings.showSettings },
+        })),
+
+      // UI state (overlay mode)
+      ui: {
+        chatPanelOpen: false,
+      },
+      setChatPanelOpen: (open) =>
+        set((state) => ({
+          ui: { ...state.ui, chatPanelOpen: open },
+        })),
+      toggleChatPanel: () =>
+        set((state) => ({
+          ui: { ...state.ui, chatPanelOpen: !state.ui.chatPanelOpen },
         })),
     }),
     {

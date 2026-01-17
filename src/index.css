@@ -7,7 +7,6 @@
   line-height: 24px;
   font-weight: 400;
   color: #ffffff;
-  background-color: #1a1a2e;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -19,8 +18,8 @@ html, body, #root {
   padding: 0;
   height: 100vh;
   width: 100vw;
-  background: #1a1a2e;
   overflow: hidden;
+  background: transparent;
 }
 
 /* Custom scrollbar for chat */
@@ -100,4 +99,20 @@ select option {
   margin-bottom: 0.5em;
   padding-left: 0.75em;
   border-left-width: 3px;
+}
+
+/* Sliding panel for overlay mode */
+.sliding-panel {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  width: 380px;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease-in-out;
+  z-index: 1000;
+}
+
+.sliding-panel.open {
+  transform: translateX(0);
 }

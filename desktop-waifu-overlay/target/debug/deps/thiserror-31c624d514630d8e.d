@@ -1,0 +1,14 @@
+/home/ywvlfy/Projects/desktop-waifu/desktop-waifu-overlay/target/debug/deps/thiserror-31c624d514630d8e.d: /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/lib.rs /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/aserror.rs /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/display.rs /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/var.rs /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/private.rs /home/ywvlfy/Projects/desktop-waifu/desktop-waifu-overlay/target/debug/build/thiserror-396b51dcd9c4d0ae/out/private.rs
+
+/home/ywvlfy/Projects/desktop-waifu/desktop-waifu-overlay/target/debug/deps/libthiserror-31c624d514630d8e.rlib: /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/lib.rs /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/aserror.rs /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/display.rs /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/var.rs /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/private.rs /home/ywvlfy/Projects/desktop-waifu/desktop-waifu-overlay/target/debug/build/thiserror-396b51dcd9c4d0ae/out/private.rs
+
+/home/ywvlfy/Projects/desktop-waifu/desktop-waifu-overlay/target/debug/deps/libthiserror-31c624d514630d8e.rmeta: /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/lib.rs /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/aserror.rs /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/display.rs /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/var.rs /home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/private.rs /home/ywvlfy/Projects/desktop-waifu/desktop-waifu-overlay/target/debug/build/thiserror-396b51dcd9c4d0ae/out/private.rs
+
+/home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/lib.rs:
+/home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/aserror.rs:
+/home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/display.rs:
+/home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/var.rs:
+/home/ywvlfy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.17/src/private.rs:
+/home/ywvlfy/Projects/desktop-waifu/desktop-waifu-overlay/target/debug/build/thiserror-396b51dcd9c4d0ae/out/private.rs:
+
+# env-dep:OUT_DIR=/home/ywvlfy/Projects/desktop-waifu/desktop-waifu-overlay/target/debug/build/thiserror-396b51dcd9c4d0ae/out

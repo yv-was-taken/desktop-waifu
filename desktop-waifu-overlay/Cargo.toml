@@ -1,0 +1,26 @@
+[package]
+name = "desktop-waifu-overlay"
+version = "0.1.0"
+edition = "2024"
+description = "Wayland layer shell overlay for desktop-waifu with embedded WebView"
+license = "MIT"
+
+[dependencies]
+# GTK4 ecosystem
+gtk4 = "0.10"
+gtk4-layer-shell = "0.7"
+webkit6 = "0.5"
+
+# IPC
+tokio = { version = "1", features = ["net", "rt-multi-thread", "sync", "macros"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# System
+libc = "0.2"
+
+# Utils
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+thiserror = "2"

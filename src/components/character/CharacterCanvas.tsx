@@ -27,7 +27,7 @@ export function CharacterCanvas() {
     <div className="w-full h-full">
       <Canvas
         gl={{
-          alpha: false,
+          alpha: true,
           antialias: true,
           powerPreference: 'high-performance',
         }}
@@ -37,10 +37,9 @@ export function CharacterCanvas() {
           near: 0.1,
           far: 1000,
         }}
-        className="bg-[#1a1a2e] w-full h-full"
+        className="w-full h-full"
       >
-        {/* Background color */}
-        <color attach="background" args={['#1a1a2e']} />
+
         
         {/* Lighting for Toon Shading */}
         <ambientLight intensity={0.8} />

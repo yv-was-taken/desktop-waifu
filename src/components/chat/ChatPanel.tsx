@@ -6,7 +6,11 @@ import { getProvider } from '../../lib/llm';
 import { buildSystemPrompt } from '../../lib/personalities';
 import type { LLMMessage } from '../../types';
 
-export function ChatPanel() {
+interface ChatPanelProps {
+  onClose?: () => void; // Optional close handler for overlay mode
+}
+
+export function ChatPanel({ onClose }: ChatPanelProps) {
   const messages = useAppStore((state) => state.chat.messages);
   const isThinking = useAppStore((state) => state.chat.isThinking);
   const settings = useAppStore((state) => state.settings);
@@ -97,12 +101,12 @@ export function ChatPanel() {
   }, [settings, messages, addMessage, setThinking, setExpression, setTalking]);
 
   return (
-    <div className="w-full h-full flex flex-col bg-slate-900/90 border-l-4 border-black">
+    <div className="w-full h-full flex flex-col bg-slate-900/90 border border-slate-600">
       {/* Header - Manga style */}
-      <div className="flex items-center justify-between p-3 bg-black drag-region">
+      <div className="flex items-center justify-between p-3 bg-[#111111] drag-region border border-slate-600">
         <div className="flex items-center gap-3 no-drag">
           <div
-            className="px-3 py-1 bg-white text-black font-black text-lg tracking-tight transform -skew-x-6 font-['Arial_Black',sans-serif]"
+            className="px-3 py-1 bg-white text-black font-black text-lg tracking-tight font-['Arial_Black',sans-serif]"
           >
             DESKTOP WAIFU
           </div>
@@ -126,6 +130,17 @@ export function ChatPanel() {
               <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
             </svg>
           </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="text-white transition-colors p-1.5 border-2 border-red-500 bg-red-500 hover:bg-red-600 hover:border-red-600 transform hover:scale-110"
+              title="Close panel"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 

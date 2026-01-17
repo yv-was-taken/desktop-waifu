@@ -18,7 +18,7 @@
         "title": "Desktop Waifu",
         "width": 900,
         "height": 700,
-        "transparent": false,
+        "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,
         "resizable": true,

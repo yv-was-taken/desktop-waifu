@@ -31,8 +31,8 @@ function ApiKeySetup() {
   };
 
   return (
-    <div className="bg-white border-4 border-black p-4 mx-2 transform -skew-x-1">
-      <div className="transform skew-x-1">
+    <div className="bg-white border border-white p-4 mx-2">
+      <div className="transform">
         <div className="text-center mb-4">
           <p className="text-black text-sm font-black uppercase">Welcome! Let's get you set up</p>
           <p className="text-gray-600 text-xs mt-1">Choose your LLM provider and enter your API key</p>
@@ -155,10 +155,10 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
               className={`max-w-[85%] relative px-4 py-3 ${
                 isUser
                   ? 'bg-slate-800 text-white border-2 border-slate-600 [clip-path:polygon(0_0,100%_0,100%_calc(100%-8px),calc(100%-8px)_100%,0_100%)]'
-                  : 'bg-white text-black border-4 border-black [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%,0_8px)]'
+                  : 'bg-[#111111] text-white border-2 border-slate-600 [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%,0_8px)]'
               }`}
             >
-              <div className={`text-sm leading-relaxed break-words prose prose-sm max-w-none ${isUser ? 'prose-invert' : 'prose-slate'}`}>
+              <div className={`text-sm leading-relaxed break-words prose prose-sm max-w-none prose-invert`}>
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -166,7 +166,7 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
                       const match = /language-(\w+)/.exec(className || '');
                       const isInline = !match && !className;
                       return isInline ? (
-                        <code className={`${isUser ? 'bg-slate-700' : 'bg-gray-200'} px-1 py-0.5 rounded text-xs`} {...props}>
+                        <code className={`${isUser ? 'bg-slate-700' : 'bg-slate-700'} px-1 py-0.5 rounded text-xs`} {...props}>
                           {children}
                         </code>
                       ) : (
@@ -186,7 +186,7 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
                 </ReactMarkdown>
               </div>
               {emotion && (
-                <span className={`text-xs mt-1 block italic ${isUser ? 'text-slate-400' : 'text-gray-500'}`}>
+                <span className={`text-xs mt-1 block italic ${isUser ? 'text-slate-400' : 'text-slate-400'}`}>
                   *{emotion}*
                 </span>
               )}
@@ -197,11 +197,11 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
 
       {isTyping && (
         <div className="flex justify-start">
-          <div className="bg-white text-black border-4 border-black px-4 py-3 [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%,0_8px)]">
+          <div className="bg-[#111111] text-white border-2 border-slate-600 px-4 py-3 [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%,0_8px)]">
             <div className="flex space-x-2 items-center">
-              <span className="w-2 h-2 bg-black rounded-full animate-bounce" />
-              <span className="w-2 h-2 bg-black rounded-full animate-bounce [animation-delay:150ms]" />
-              <span className="w-2 h-2 bg-black rounded-full animate-bounce [animation-delay:300ms]" />
+              <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
+              <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:150ms]" />
+              <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:300ms]" />
             </div>
           </div>
         </div>

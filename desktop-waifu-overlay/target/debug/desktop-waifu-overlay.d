@@ -1,0 +1,1 @@
+/home/ywvlfy/Projects/desktop-waifu/desktop-waifu-overlay/target/debug/desktop-waifu-overlay: /home/ywvlfy/Projects/desktop-waifu/desktop-waifu-overlay/src/ipc/mod.rs /home/ywvlfy/Projects/desktop-waifu/desktop-waifu-overlay/src/main.rs
