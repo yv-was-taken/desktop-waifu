@@ -21,10 +21,11 @@ declare global {
 }
 
 // Window dimension constants
-const WINDOW_WIDTH_COLLAPSED = 160;  // Character only
-const WINDOW_WIDTH_EXPANDED = 660;   // Chat + Character
-const WINDOW_HEIGHT = 380;           // Fixed height for overlay
-const CHAT_ANIMATION_DURATION = 300; // ms (matches CSS transition)
+const WINDOW_WIDTH_COLLAPSED = 160;   // Character only
+const WINDOW_WIDTH_EXPANDED = 800;    // Chat + Character
+const WINDOW_HEIGHT_COLLAPSED = 380;  // Character only
+const WINDOW_HEIGHT_EXPANDED = 1000;  // Chat + Character (more room for chat)
+const CHAT_ANIMATION_DURATION = 300;  // ms (matches CSS transition)
 
 // Helper to send window move messages to the Rust backend via WebKit
 function sendMoveMessage(message: { action: string; offsetX?: number; offsetY?: number }) {
@@ -82,11 +83,11 @@ function OverlayMode() {
   useEffect(() => {
     if (chatPanelOpen) {
       // Opening: resize immediately (expand first), then chat slides in
-      sendResizeMessage(WINDOW_WIDTH_EXPANDED, WINDOW_HEIGHT);
+      sendResizeMessage(WINDOW_WIDTH_EXPANDED, WINDOW_HEIGHT_EXPANDED);
     } else {
       // Closing: wait for slide-out animation to complete, then resize
       const timer = setTimeout(() => {
-        sendResizeMessage(WINDOW_WIDTH_COLLAPSED, WINDOW_HEIGHT);
+        sendResizeMessage(WINDOW_WIDTH_COLLAPSED, WINDOW_HEIGHT_COLLAPSED);
       }, CHAT_ANIMATION_DURATION);
       return () => clearTimeout(timer);
     }
@@ -189,9 +190,9 @@ function OverlayMode() {
         style={{ width: WINDOW_WIDTH_EXPANDED }}
       >
         {/* Chat panel area - fixed width on left, content slides in */}
-        <div className="w-[500px] h-full flex-shrink-0 overflow-hidden">
+        <div className="w-[640px] h-full flex-shrink-0 overflow-hidden">
           <div
-            className="w-[500px] h-full bg-[#1a1a2e] flex flex-col transition-transform duration-300 ease-in-out"
+            className="w-[640px] h-full bg-[#1a1a2e] flex flex-col transition-transform duration-300 ease-in-out"
             style={{ transform: chatPanelOpen ? 'translateX(0)' : 'translateX(-100%)' }}
           >
             <ChatPanel onClose={() => setChatPanelOpen(false)} />
