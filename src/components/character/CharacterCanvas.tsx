@@ -15,13 +15,32 @@ function LoadingFallback() {
   );
 }
 
-export function CharacterCanvas() {
+interface CharacterCanvasProps {
+  disableControls?: boolean; // Disable camera controls (for overlay mode)
+}
+
+export function CharacterCanvas({ disableControls = false }: CharacterCanvasProps) {
   const selectedCharacter = useAppStore((state) => state.settings.selectedCharacter);
   const character = characters[selectedCharacter];
 
   if (!character) {
     return <div className="flex-1 flex items-center justify-center text-white">Character not found</div>;
   }
+
+  // Different camera settings for overlay mode (fixed view showing full body)
+  const cameraSettings = disableControls
+    ? {
+        position: [0, 0.8, 4] as [number, number, number],
+        fov: 28,
+        near: 0.1,
+        far: 1000,
+      }
+    : {
+        position: [0, -0.3, 3] as [number, number, number],
+        fov: 30,
+        near: 0.1,
+        far: 1000,
+      };
 
   return (
     <div className="w-full h-full">
@@ -31,16 +50,11 @@ export function CharacterCanvas() {
           antialias: true,
           powerPreference: 'high-performance',
         }}
-        camera={{
-          position: [0, -0.3, 3],
-          fov: 30,
-          near: 0.1,
-          far: 1000,
-        }}
+        camera={cameraSettings}
         className="w-full h-full"
       >
 
-        
+
         {/* Lighting for Toon Shading */}
         <ambientLight intensity={0.8} />
         <directionalLight
@@ -64,16 +78,18 @@ export function CharacterCanvas() {
           </EffectComposer>
         </Suspense>
 
-        {/* Camera controls */}
-        <OrbitControls
-          enablePan={true}
-          enableZoom={true}
-          minDistance={1}
-          maxDistance={10}
-          minPolarAngle={Math.PI / 6}
-          maxPolarAngle={Math.PI / 2}
-          target={[0, -0.3, 0]}
-        />
+        {/* Camera controls - disabled in overlay mode */}
+        {!disableControls && (
+          <OrbitControls
+            enablePan={true}
+            enableZoom={true}
+            minDistance={1}
+            maxDistance={10}
+            minPolarAngle={Math.PI / 6}
+            maxPolarAngle={Math.PI / 2}
+            target={[0, -0.3, 0]}
+          />
+        )}
       </Canvas>
     </div>
   );
