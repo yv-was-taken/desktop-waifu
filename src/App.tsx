@@ -20,9 +20,10 @@ declare global {
   }
 }
 
-// Window width constants
-const WINDOW_WIDTH_COLLAPSED = 240;  // Character only
-const WINDOW_WIDTH_EXPANDED = 740;   // Chat + Character
+// Window dimension constants
+const WINDOW_WIDTH_COLLAPSED = 160;  // Character only
+const WINDOW_WIDTH_EXPANDED = 660;   // Chat + Character
+const WINDOW_HEIGHT = 380;           // Fixed height for overlay
 const CHAT_ANIMATION_DURATION = 300; // ms (matches CSS transition)
 
 // Helper to send window move messages to the Rust backend via WebKit
@@ -36,8 +37,8 @@ function sendWindowControlMessage(message: { action: 'hide' | 'show' }) {
 }
 
 // Helper to send window resize messages to Rust backend
-function sendResizeMessage(width: number) {
-  window.webkit?.messageHandlers?.resizeWindow?.postMessage({ action: 'resize', width });
+function sendResizeMessage(width: number, height: number) {
+  window.webkit?.messageHandlers?.resizeWindow?.postMessage({ action: 'resize', width, height });
 }
 
 // Double-click timing threshold in milliseconds
@@ -81,11 +82,11 @@ function OverlayMode() {
   useEffect(() => {
     if (chatPanelOpen) {
       // Opening: resize immediately (expand first), then chat slides in
-      sendResizeMessage(WINDOW_WIDTH_EXPANDED);
+      sendResizeMessage(WINDOW_WIDTH_EXPANDED, WINDOW_HEIGHT);
     } else {
       // Closing: wait for slide-out animation to complete, then resize
       const timer = setTimeout(() => {
-        sendResizeMessage(WINDOW_WIDTH_COLLAPSED);
+        sendResizeMessage(WINDOW_WIDTH_COLLAPSED, WINDOW_HEIGHT);
       }, CHAT_ANIMATION_DURATION);
       return () => clearTimeout(timer);
     }
@@ -198,15 +199,22 @@ function OverlayMode() {
         </div>
 
         {/* Character canvas - draggable, click toggles panel, double-click hides */}
+        {/* Outer div is viewport (clips overflow), inner div is fixed canvas size */}
         <div
           ref={dragElementRef}
-          className="w-[240px] h-full cursor-grab active:cursor-grabbing flex-shrink-0 transition-transform duration-700 ease-in"
+          className="w-[160px] h-full cursor-grab active:cursor-grabbing flex-shrink-0 transition-transform duration-700 ease-in overflow-hidden relative"
           style={{ transform: isHiding ? 'translateX(100%)' : 'translateX(0)' }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
         >
-          <CharacterCanvas disableControls />
+          {/* Fixed size canvas - positioned to center character in viewport */}
+          <div
+            className="absolute w-[240px] h-[600px]"
+            style={{ left: '-40px', bottom: '0' }}
+          >
+            <CharacterCanvas disableControls />
+          </div>
         </div>
       </div>
 

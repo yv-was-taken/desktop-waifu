@@ -18,6 +18,11 @@ use tray::{spawn_tray, update_tray_visibility, TrayMessage};
 
 const APP_ID: &str = "com.desktop-waifu.overlay";
 
+// Window dimension constants
+const WINDOW_WIDTH_COLLAPSED: i32 = 160;  // Character only
+const WINDOW_WIDTH_EXPANDED: i32 = 660;   // Chat + Character
+const WINDOW_HEIGHT: i32 = 380;           // Fixed height for overlay
+
 // Store window position (margins from edges)
 #[derive(Clone, Debug, Default)]
 struct WindowPosition {
@@ -63,8 +68,8 @@ fn build_ui(app: &Application) {
     let window = ApplicationWindow::builder()
         .application(app)
         .title("Desktop Waifu Overlay")
-        .default_width(240)
-        .default_height(600)
+        .default_width(WINDOW_WIDTH_COLLAPSED)
+        .default_height(WINDOW_HEIGHT)
         .build();
 
     // Set up CSS for transparency
@@ -327,9 +332,11 @@ fn create_webview_with_handlers(
 
                 match action {
                     "resize" => {
-                        let width = parsed["width"].as_i64().unwrap_or(740) as i32;
-                        info!("WebView requested resize to width: {}", width);
+                        let width = parsed["width"].as_i64().unwrap_or(WINDOW_WIDTH_EXPANDED as i64) as i32;
+                        let height = parsed["height"].as_i64().unwrap_or(WINDOW_HEIGHT as i64) as i32;
+                        info!("WebView requested resize to {}x{}", width, height);
                         window_for_resize.set_default_width(width);
+                        window_for_resize.set_default_height(height);
                     }
                     _ => {}
                 }
