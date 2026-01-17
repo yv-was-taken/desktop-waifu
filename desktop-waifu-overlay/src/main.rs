@@ -1,16 +1,20 @@
 mod ipc;
+mod tray;
 
 use anyhow::Result;
-use gtk4::glib;
+use gtk4::{gio, glib};
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow};
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell as _};
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Duration;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 use webkit6::prelude::*;
 use webkit6::{Settings as WebViewSettings, UserContentManager, WebView};
+
+use tray::{spawn_tray, update_tray_visibility, TrayMessage};
 
 const APP_ID: &str = "com.desktop-waifu.overlay";
 
@@ -109,11 +113,63 @@ fn build_ui(app: &Application) {
 
     info!("Layer shell configured: OVERLAY layer, bottom-right anchor");
 
-    // Create WebView with message handler for drag events
-    let webview = create_webview_with_drag_handler(&window, position, drag_state);
+    // Spawn system tray
+    let (tray_receiver, tray_handle) = match spawn_tray() {
+        Ok((rx, handle)) => (Some(rx), Some(handle)),
+        Err(e) => {
+            tracing::warn!("Failed to spawn system tray: {}. Continuing without tray.", e);
+            (None, None)
+        }
+    };
+
+    // Create WebView with message handler for drag events and window control
+    let webview = create_webview_with_handlers(&window, position, drag_state, tray_handle.clone());
 
     // Add WebView to window
     window.set_child(Some(&webview));
+
+    // Set up tray message handler on GTK main loop
+    if let Some(receiver) = tray_receiver {
+        let window_for_tray = window.clone();
+        let webview_for_tray = webview.clone();
+        let tray_handle_for_update = tray_handle.clone();
+
+        // Poll for tray messages every 100ms
+        glib::timeout_add_local(Duration::from_millis(100), move || {
+            while let Ok(msg) = receiver.try_recv() {
+                match msg {
+                    TrayMessage::Show => {
+                        info!("Tray: Show requested");
+                        window_for_tray.present();
+                        // Notify WebView to reset state and play show animation
+                        webview_for_tray.evaluate_javascript(
+                            "window.dispatchEvent(new CustomEvent('trayShow'))",
+                            None,
+                            None,
+                            None::<&gio::Cancellable>,
+                            |_| {},
+                        );
+                        if let Some(ref handle) = tray_handle_for_update {
+                            update_tray_visibility(handle, true);
+                        }
+                    }
+                    TrayMessage::Hide => {
+                        info!("Tray: Hide requested");
+                        window_for_tray.hide();
+                        if let Some(ref handle) = tray_handle_for_update {
+                            update_tray_visibility(handle, false);
+                        }
+                    }
+                    TrayMessage::Quit => {
+                        info!("Tray: Quit requested");
+                        window_for_tray.close();
+                        return glib::ControlFlow::Break;
+                    }
+                }
+            }
+            glib::ControlFlow::Continue
+        });
+    }
 
     // Load from Vite dev server - add ?overlay=true to enable overlay mode
     let dev_url = "http://localhost:1420?overlay=true";
@@ -126,10 +182,11 @@ fn build_ui(app: &Application) {
     info!("Overlay window created and presented");
 }
 
-fn create_webview_with_drag_handler(
+fn create_webview_with_handlers(
     window: &ApplicationWindow,
     position: Rc<RefCell<WindowPosition>>,
     drag_state: Rc<RefCell<DragState>>,
+    tray_handle: Option<ksni::Handle<tray::DesktopWaifuTray>>,
 ) -> WebView {
     // Create WebView settings
     let settings = WebViewSettings::new();
@@ -156,11 +213,13 @@ fn create_webview_with_drag_handler(
     // Register the "moveWindow" message handler
     content_manager.register_script_message_handler("moveWindow", None);
 
+    // Register the "windowControl" message handler for hide/show
+    content_manager.register_script_message_handler("windowControl", None);
+
     // Clone window for the closure
     let window_clone = window.clone();
 
-    // Connect to the script-message-received signal
-    // The callback receives (manager, js_value)
+    // Connect to the script-message-received signal for drag
     content_manager.connect_script_message_received(Some("moveWindow"), move |_manager, js_value| {
         // Convert JS value to JSON string
         if let Some(json_str) = js_value.to_json(0) {
@@ -219,6 +278,41 @@ fn create_webview_with_drag_handler(
         }
     });
 
+    // Clone window for windowControl handler
+    let window_for_control = window.clone();
+
+    // Connect to the script-message-received signal for window control (hide/show)
+    content_manager.connect_script_message_received(Some("windowControl"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let action = parsed["action"].as_str().unwrap_or("");
+
+                match action {
+                    "hide" => {
+                        info!("WebView requested hide");
+                        // Wait for the hide animation to complete (800ms), then hide window
+                        let win = window_for_control.clone();
+                        let handle = tray_handle.clone();
+                        glib::timeout_add_local_once(Duration::from_millis(800), move || {
+                            win.hide();
+                            if let Some(ref h) = handle {
+                                update_tray_visibility(h, false);
+                            }
+                        });
+                    }
+                    "show" => {
+                        info!("WebView requested show");
+                        window_for_control.present();
+                        if let Some(ref handle) = tray_handle {
+                            update_tray_visibility(handle, true);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    });
+
     // Create WebView with the content manager
     let webview = WebView::builder()
         .settings(&settings)
@@ -228,7 +322,7 @@ fn create_webview_with_drag_handler(
     // Make WebView background transparent (RGBA with 0 alpha)
     webview.set_background_color(&gtk4::gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
 
-    info!("WebView created with drag handler and transparent background");
+    info!("WebView created with drag and window control handlers");
 
     webview
 }

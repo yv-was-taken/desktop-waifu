@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import type { CharacterConfig } from '../../types';
 import { useAppStore } from '../../store';
 
-type AnimationState = 'idle' | 'listening' | 'thinking' | 'talking';
+type AnimationState = 'idle' | 'listening' | 'thinking' | 'talking' | 'running';
 
 interface CharacterModelProps {
   config: CharacterConfig;
@@ -23,13 +23,15 @@ export function CharacterModel({ config }: CharacterModelProps) {
   const isUserTyping = useAppStore((state) => state.chat.isUserTyping);
   const isThinking = useAppStore((state) => state.chat.isThinking);
   const isTalking = useAppStore((state) => state.character.isTalking);
+  const isHiding = useAppStore((state) => state.character.isHiding);
 
   const animationState: AnimationState = useMemo(() => {
+    if (isHiding) return 'running';
     if (isTalking) return 'talking';
     if (isThinking) return 'thinking';
     if (isUserTyping) return 'listening';
     return 'idle';
-  }, [isTalking, isThinking, isUserTyping]);
+  }, [isHiding, isTalking, isThinking, isUserTyping]);
 
   // Load VRM model
   const gltf = useLoader(GLTFLoader, config.model.path, (loader) => {
@@ -118,7 +120,10 @@ export function CharacterModel({ config }: CharacterModelProps) {
     if (!modelLoaded || !mixerRef.current) return;
 
     // Map animation state to animation name
-    const animName = animationState === 'listening' ? 'idle' : animationState;
+    // 'listening' and 'running' fall back to idle if no specific animation exists
+    const animName = animationState === 'listening' ? 'idle'
+      : animationState === 'running' ? (actionsRef.current['running'] ? 'running' : 'idle')
+      : animationState;
 
     if (!actionsRef.current[animName]) {
       // Fallback to idle if specific animation not found

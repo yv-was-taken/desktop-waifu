@@ -7,6 +7,7 @@ interface CharacterState {
   currentAnimation: string;
   currentExpression: string;
   isTalking: boolean;
+  isHiding: boolean;  // Character is running off screen to hide
 }
 
 interface ChatState {
@@ -42,6 +43,7 @@ interface AppState {
   setAnimation: (animation: string) => void;
   setExpression: (expression: string) => void;
   setTalking: (talking: boolean) => void;
+  setHiding: (hiding: boolean) => void;
 
   // Chat
   chat: ChatState;
@@ -70,6 +72,7 @@ export const useAppStore = create<AppState>()(
         currentAnimation: 'idle',
         currentExpression: 'neutral',
         isTalking: false,
+        isHiding: false,
       },
       setCharacterLoaded: (loaded) =>
         set((state) => ({
@@ -86,6 +89,10 @@ export const useAppStore = create<AppState>()(
       setTalking: (talking) =>
         set((state) => ({
           character: { ...state.character, isTalking: talking },
+        })),
+      setHiding: (hiding) =>
+        set((state) => ({
+          character: { ...state.character, isHiding: hiding },
         })),
 
       // Chat state

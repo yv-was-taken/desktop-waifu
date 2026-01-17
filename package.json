@@ -4,8 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "trap 'kill $(jobs -p) 2>/dev/null' EXIT INT TERM; vite & sleep 2 && cd desktop-waifu-overlay && cargo run",
+    "dev:web": "vite",
+    "build": "tsc && vite build && cd desktop-waifu-overlay && cargo build --release",
+    "build:web": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
   },
