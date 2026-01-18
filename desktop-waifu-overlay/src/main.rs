@@ -134,6 +134,21 @@ fn build_ui(app: &Application) {
     // Add WebView to window
     window.set_child(Some(&webview));
 
+    // Set up keyboard focus handler (needs access to webview)
+    let content_manager = webview.user_content_manager().unwrap();
+    content_manager.register_script_message_handler("keyboardFocus", None);
+
+    let webview_for_focus = webview.clone();
+    let window_for_focus = window.clone();
+    content_manager.connect_script_message_received(Some("keyboardFocus"), move |_manager, _js_value| {
+        info!("Requesting keyboard focus:");
+        info!("  window.is_active: {}", window_for_focus.is_active());
+        info!("  webview.has_focus BEFORE grab: {}", webview_for_focus.has_focus());
+        let result = webview_for_focus.grab_focus();
+        info!("  grab_focus() returned: {}", result);
+        info!("  webview.has_focus AFTER grab: {}", webview_for_focus.has_focus());
+    });
+
     // Set up tray message handler on GTK main loop
     if let Some(receiver) = tray_receiver {
         let window_for_tray = window.clone();
@@ -182,6 +197,17 @@ fn build_ui(app: &Application) {
     webview.load_uri(dev_url);
     info!("Loading WebView from: {}", dev_url);
 
+    // When window loses focus (user clicks away), switch to OnDemand mode
+    // so other apps can receive keyboard input.
+    // When they click back on the overlay, OnDemand will let them regain focus.
+    window.connect_is_active_notify(|w| {
+        info!("Window is_active changed to: {}", w.is_active());
+        if !w.is_active() {
+            info!("User clicked away - switching to OnDemand mode");
+            w.set_keyboard_mode(KeyboardMode::OnDemand);
+        }
+    });
+
     // Show the window
     window.present();
 
@@ -224,6 +250,9 @@ fn create_webview_with_handlers(
 
     // Register the "resizeWindow" message handler for dynamic width adjustment
     content_manager.register_script_message_handler("resizeWindow", None);
+
+    // Register debug logging handler
+    content_manager.register_script_message_handler("debug", None);
 
     // Clone window for the closure
     let window_clone = window.clone();
@@ -338,9 +367,35 @@ fn create_webview_with_handlers(
                         info!("WebView requested resize to {}x{}", width, height);
                         window_for_resize.set_default_width(width);
                         window_for_resize.set_default_height(height);
+
+                        // Compositor revokes keyboard focus ~14ms after resize.
+                        // Use Exclusive mode briefly when chat opens to grab focus,
+                        // then switch back to OnDemand so user can type in other apps.
+                        let is_expanding = width == WINDOW_WIDTH_EXPANDED;
+                        let window_clone = window_for_resize.clone();
+                        glib::timeout_add_local_once(Duration::from_millis(50), move || {
+                            if is_expanding {
+                                info!("Chat opening - switching to Exclusive mode for keyboard input");
+                                window_clone.set_keyboard_mode(KeyboardMode::Exclusive);
+                                // OnDemand mode is restored when user clicks outside (is_active becomes false)
+                            } else {
+                                info!("Chat closing - switching to OnDemand mode");
+                                window_clone.set_keyboard_mode(KeyboardMode::OnDemand);
+                            }
+                        });
                     }
                     _ => {}
                 }
+            }
+        }
+    });
+
+    // Connect to debug message handler for logging from JavaScript
+    content_manager.connect_script_message_received(Some("debug"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let msg = parsed["message"].as_str().unwrap_or("");
+                info!("[JS] {}", msg);
             }
         }
     });

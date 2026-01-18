@@ -15,9 +15,21 @@ declare global {
         moveWindow?: { postMessage: (msg: { action: string; offsetX?: number; offsetY?: number }) => void };
         windowControl?: { postMessage: (msg: { action: 'hide' | 'show' }) => void };
         resizeWindow?: { postMessage: (msg: { action: 'resize'; width: number }) => void };
+        debug?: { postMessage: (msg: { message: string }) => void };
+        keyboardFocus?: { postMessage: (msg: object) => void };
       };
     };
   }
+}
+
+// Debug logging helper - logs to Rust console
+function debugLog(message: string) {
+  window.webkit?.messageHandlers?.debug?.postMessage({ message });
+}
+
+// Request keyboard focus from compositor (for Wayland layer-shell)
+function requestKeyboardFocus() {
+  window.webkit?.messageHandlers?.keyboardFocus?.postMessage({});
 }
 
 // Window dimension constants
@@ -194,6 +206,24 @@ function OverlayMode() {
           <div
             className="w-[640px] h-full bg-[#1a1a2e] flex flex-col transition-transform duration-300 ease-in-out"
             style={{ transform: chatPanelOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+            onTransitionEnd={(e) => {
+              // Only handle transform transitions on this element when opening
+              if (e.propertyName === 'transform' && e.target === e.currentTarget && chatPanelOpen) {
+                debugLog('transitionend fired - panel opened');
+                // Small delay after transition to focus after whatever steals focus
+                setTimeout(() => {
+                  // Request keyboard focus from compositor first
+                  requestKeyboardFocus();
+
+                  const textarea = document.querySelector('textarea');
+                  debugLog(`textarea found: ${!!textarea}`);
+                  if (textarea) {
+                    (textarea as HTMLTextAreaElement).focus();
+                    debugLog('focus() called');
+                  }
+                }, 50);
+              }
+            }}
           >
             <ChatPanel onClose={() => setChatPanelOpen(false)} />
           </div>

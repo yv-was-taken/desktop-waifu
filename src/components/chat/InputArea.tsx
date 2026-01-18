@@ -1,6 +1,17 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store';
 
+// Extend Window for WebKit message handlers
+declare global {
+  interface Window {
+    webkit?: {
+      messageHandlers?: {
+        debug?: { postMessage: (msg: { message: string }) => void };
+      };
+    };
+  }
+}
+
 interface InputAreaProps {
   onSend: (message: string) => void;
   disabled?: boolean;
@@ -97,6 +108,36 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
       window.removeEventListener('focus', handleWindowFocus);
     };
   }, [disabled]);
+
+  // Debug: track focus changes to understand what's stealing focus
+  useEffect(() => {
+    const debugLog = (msg: string) => {
+      window.webkit?.messageHandlers?.debug?.postMessage({ message: msg });
+    };
+
+    const getElementDesc = (el: EventTarget | null): string => {
+      if (!el) return 'null';
+      if (el instanceof HTMLElement) {
+        return `<${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${el.className ? '.' + el.className.split(' ')[0] : ''}>`;
+      }
+      return String(el);
+    };
+
+    const handleFocusIn = (e: FocusEvent) => {
+      debugLog(`focusin: ${getElementDesc(e.target)}`);
+    };
+    const handleFocusOut = (e: FocusEvent) => {
+      debugLog(`focusout: ${getElementDesc(e.target)} -> ${getElementDesc(e.relatedTarget)}`);
+    };
+
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, []);
 
   return (
     <div className="p-3 bg-black">
