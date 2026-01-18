@@ -198,6 +198,22 @@ export function SettingsModal() {
             />
           </div>
 
+          {/* Chat Scale */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">
+              Chat Scale: {(settings.chatScale ?? 1.0).toFixed(1)}x
+            </label>
+            <input
+              type="range"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={settings.chatScale ?? 1.0}
+              onChange={(e) => updateSettings({ chatScale: parseFloat(e.target.value) })}
+              className="w-full accent-teal-400"
+            />
+          </div>
+
           {/* Always on Top */}
           <div className="flex items-center justify-between">
             <label className="text-sm text-gray-300">Always on Top</label>

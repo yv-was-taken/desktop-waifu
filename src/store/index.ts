@@ -30,6 +30,7 @@ interface SettingsState {
   apiKey: string;
   alwaysOnTop: boolean;
   characterScale: number;
+  chatScale: number;
   showSettings: boolean;
   // Character selection
   selectedCharacter: string;
@@ -155,6 +156,7 @@ export const useAppStore = create<AppState>()(
         apiKey: '',
         alwaysOnTop: true,
         characterScale: 1.0,
+        chatScale: 1.0,
         showSettings: false,
         // Character selection
         selectedCharacter: 'emily',
@@ -261,6 +263,7 @@ export const useAppStore = create<AppState>()(
           apiKey: state.settings.apiKey,
           alwaysOnTop: state.settings.alwaysOnTop,
           characterScale: state.settings.characterScale,
+          chatScale: state.settings.chatScale,
           selectedCharacter: state.settings.selectedCharacter,
           selectedPersonality: state.settings.selectedPersonality,
           detailLevel: state.settings.detailLevel,

@@ -16,10 +16,10 @@ function requestKeyboardFocus() {
 // Base window dimension constants (at scale 1.0)
 const BASE_WIDTH_COLLAPSED = 160;   // Character only
 const BASE_HEIGHT_COLLAPSED = 380;  // Character only
-const BASE_WIDTH_EXPANDED = 800;    // Chat + Character
-const BASE_HEIGHT_EXPANDED = 1000;  // Chat + Character (more room for chat)
 const BASE_CANVAS_WIDTH = 240;      // Inner canvas width
 const BASE_CANVAS_HEIGHT = 600;     // Inner canvas height
+const BASE_CHAT_WIDTH = 640;        // Chat panel width
+const BASE_CHAT_HEIGHT = 1000;      // Chat panel height
 const CHAT_ANIMATION_DURATION = 300;  // ms (matches CSS transition)
 
 // Helper to send window move messages to the Rust backend via WebKit
@@ -45,15 +45,24 @@ function OverlayMode() {
   const setChatPanelOpen = useAppStore((state) => state.setChatPanelOpen);
   const isHiding = useAppStore((state) => state.character.isHiding);
   const setHiding = useAppStore((state) => state.setHiding);
-  const characterScale = useAppStore((state) => state.settings.characterScale);
+  const characterScale = useAppStore((state) => state.settings.characterScale) ?? 1.0;
+  const chatScale = useAppStore((state) => state.settings.chatScale) ?? 1.0;
 
-  // Scaled dimensions based on character scale setting
-  const scaledCollapsedWidth = Math.round(BASE_WIDTH_COLLAPSED * characterScale);
-  const scaledCollapsedHeight = Math.round(BASE_HEIGHT_COLLAPSED * characterScale);
-  const scaledExpandedWidth = BASE_WIDTH_EXPANDED - BASE_WIDTH_COLLAPSED + scaledCollapsedWidth;
-  const scaledExpandedHeight = Math.max(BASE_HEIGHT_EXPANDED, scaledCollapsedHeight);
+  // Scaled character dimensions
+  const scaledCharacterWidth = Math.round(BASE_WIDTH_COLLAPSED * characterScale);
+  const scaledCharacterHeight = Math.round(BASE_HEIGHT_COLLAPSED * characterScale);
   const scaledCanvasWidth = Math.round(BASE_CANVAS_WIDTH * characterScale);
   const scaledCanvasHeight = Math.round(BASE_CANVAS_HEIGHT * characterScale);
+
+  // Scaled chat dimensions
+  const scaledChatWidth = Math.round(BASE_CHAT_WIDTH * chatScale);
+  const scaledChatHeight = Math.round(BASE_CHAT_HEIGHT * chatScale);
+
+  // Window dimensions
+  const scaledCollapsedWidth = scaledCharacterWidth;
+  const scaledCollapsedHeight = scaledCharacterHeight;
+  const scaledExpandedWidth = scaledChatWidth + scaledCharacterWidth;
+  const scaledExpandedHeight = Math.max(scaledChatHeight, scaledCharacterHeight);
 
   // Drag state - track start position, not incremental deltas
   const isDragging = useRef(false);
@@ -95,7 +104,7 @@ function OverlayMode() {
       }, CHAT_ANIMATION_DURATION);
       return () => clearTimeout(timer);
     }
-  }, [chatPanelOpen, scaledCollapsedWidth, scaledCollapsedHeight, scaledExpandedWidth, scaledExpandedHeight]);
+  }, [chatPanelOpen, scaledCollapsedWidth, scaledCollapsedHeight, scaledExpandedWidth, scaledExpandedHeight, scaledChatWidth, scaledChatHeight]);
 
   // Trigger hide sequence: set hiding state, wait for animation, then tell Rust to hide
   const triggerHide = useCallback(() => {
@@ -194,10 +203,10 @@ function OverlayMode() {
         style={{ width: scaledExpandedWidth }}
       >
         {/* Chat panel area - fixed width on left, content slides in */}
-        <div className="w-[640px] h-full flex-shrink-0 overflow-hidden">
+        <div className="h-full flex-shrink-0 overflow-hidden" style={{ width: scaledChatWidth }}>
           <div
-            className="w-[640px] h-full bg-[#1a1a2e] flex flex-col transition-transform duration-300 ease-in-out"
-            style={{ transform: chatPanelOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+            className="h-full bg-[#1a1a2e] flex flex-col transition-transform duration-300 ease-in-out"
+            style={{ width: scaledChatWidth, transform: chatPanelOpen ? 'translateX(0)' : 'translateX(-100%)' }}
             onTransitionEnd={(e) => {
               // Only handle transform transitions on this element when opening
               if (e.propertyName === 'transform' && e.target === e.currentTarget && chatPanelOpen) {

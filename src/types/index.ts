@@ -60,6 +60,7 @@ export interface AppSettings {
   apiKey: string;
   alwaysOnTop: boolean;
   characterScale: number;
+  chatScale: number;
 }
 
 // Personality Types
