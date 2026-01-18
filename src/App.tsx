@@ -3,6 +3,7 @@ import { CharacterCanvas } from './components/character';
 import { ChatPanel } from './components/chat';
 import { SettingsModal, TitleBar } from './components/ui';
 import { useAppStore } from './store';
+import { debugLog } from './lib/debug';
 
 // Check if we're in overlay mode (desktop pet mode)
 // Window interface types are declared in src/lib/platform.ts
@@ -208,16 +209,21 @@ function OverlayMode() {
             className="h-full bg-[#1a1a2e] flex flex-col transition-transform duration-300 ease-in-out"
             style={{ width: scaledChatWidth, transform: chatPanelOpen ? 'translateX(0)' : 'translateX(-100%)' }}
             onTransitionEnd={(e) => {
+              debugLog(`[FOCUS] transitionEnd - property: ${e.propertyName}, target===currentTarget: ${e.target === e.currentTarget}, chatPanelOpen: ${chatPanelOpen}`);
               // Only handle transform transitions on this element when opening
               if (e.propertyName === 'transform' && e.target === e.currentTarget && chatPanelOpen) {
+                debugLog('[FOCUS] Conditions met, scheduling focus');
                 // Small delay after transition to focus after whatever steals focus
                 setTimeout(() => {
+                  debugLog('[FOCUS] Timeout fired, calling requestKeyboardFocus');
                   // Request keyboard focus from compositor first
                   requestKeyboardFocus();
 
                   const textarea = document.querySelector('textarea');
+                  debugLog(`[FOCUS] textarea found: ${!!textarea}`);
                   if (textarea) {
                     (textarea as HTMLTextAreaElement).focus();
+                    debugLog(`[FOCUS] focus() called, activeElement: ${document.activeElement?.tagName}`);
                   }
                 }, 50);
               }

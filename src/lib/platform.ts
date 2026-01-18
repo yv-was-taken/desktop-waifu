@@ -23,6 +23,8 @@ declare global {
         // Command execution handlers (platform.ts)
         executeCommand?: { postMessage: (msg: { cmd: string; callbackId: string }) => void };
         getSystemInfo?: { postMessage: (msg: { callbackId: string }) => void };
+        // Debug logging handler (debug.ts)
+        debug?: { postMessage: (msg: { message: string }) => void };
       };
     };
   }

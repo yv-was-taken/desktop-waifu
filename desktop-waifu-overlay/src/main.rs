@@ -1,6 +1,18 @@
 mod ipc;
 mod tray;
 
+// Debug logging flag - set to true to enable debug output to terminal
+const DEBUG_LOGGING: bool = false;
+
+// Helper macro for conditional debug logging
+macro_rules! debug_log {
+    ($($arg:tt)*) => {
+        if DEBUG_LOGGING {
+            println!($($arg)*);
+        }
+    };
+}
+
 use anyhow::Result;
 use gtk4::{gio, glib};
 use gtk4::prelude::*;
@@ -140,6 +152,7 @@ fn build_ui(app: &Application) {
 
     let webview_for_focus = webview.clone();
     content_manager.connect_script_message_received(Some("keyboardFocus"), move |_manager, _js_value| {
+        debug_log!("[FOCUS] Keyboard focus requested, grabbing focus");
         webview_for_focus.grab_focus();
     });
 
@@ -243,6 +256,9 @@ fn create_webview_with_handlers(
 
     // Register the "getSystemInfo" message handler
     content_manager.register_script_message_handler("getSystemInfo", None);
+
+    // Register the "debug" message handler for JS debug logging
+    content_manager.register_script_message_handler("debug", None);
 
     // Clone window for the closure
     let window_clone = window.clone();
@@ -355,9 +371,12 @@ fn create_webview_with_handlers(
                         // Compositor revokes keyboard focus ~14ms after resize.
                         // Use Exclusive mode briefly when chat opens to grab focus,
                         // then switch back to OnDemand so user can type in other apps.
-                        let is_expanding = width == WINDOW_WIDTH_EXPANDED;
+                        // Use > comparison instead of == to handle scaled chat widths
+                        let is_expanding = width > WINDOW_WIDTH_COLLAPSED;
+                        debug_log!("[RESIZE] width={}, height={}, is_expanding={}", width, height, is_expanding);
                         let window_clone = window_for_resize.clone();
                         glib::timeout_add_local_once(Duration::from_millis(50), move || {
+                            debug_log!("[RESIZE] Setting keyboard mode: {}", if is_expanding { "Exclusive" } else { "OnDemand" });
                             if is_expanding {
                                 window_clone.set_keyboard_mode(KeyboardMode::Exclusive);
                             } else {
@@ -518,6 +537,18 @@ fn create_webview_with_handlers(
                         Err(std::sync::mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
                     }
                 });
+            }
+        }
+    });
+
+    // Set up debug handler for JS debug logging (only prints when DEBUG_LOGGING is true)
+    content_manager.connect_script_message_received(Some("debug"), move |_manager, js_value| {
+        if DEBUG_LOGGING {
+            if let Some(json_str) = js_value.to_json(0) {
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                    let msg = parsed["message"].as_str().unwrap_or("");
+                    println!("[JS] {}", msg);
+                }
             }
         }
     });
