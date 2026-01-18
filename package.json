@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "trap 'kill $(jobs -p) 2>/dev/null' EXIT INT TERM; vite & sleep 2 && cd desktop-waifu-overlay && cargo run",
+    "dev": "trap 'kill $(jobs -p) 2>/dev/null' EXIT INT TERM; vite & sleep 2 && cargo run --manifest-path desktop-waifu-overlay/Cargo.toml",
     "dev:web": "vite",
-    "build": "tsc && vite build && cd desktop-waifu-overlay && cargo build --release",
+    "build": "tsc && vite build && cargo build --release --manifest-path desktop-waifu-overlay/Cargo.toml",
     "build:web": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
