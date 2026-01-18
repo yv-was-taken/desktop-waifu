@@ -13,11 +13,13 @@ function requestKeyboardFocus() {
   window.webkit?.messageHandlers?.keyboardFocus?.postMessage({});
 }
 
-// Window dimension constants
-const WINDOW_WIDTH_COLLAPSED = 160;   // Character only
-const WINDOW_WIDTH_EXPANDED = 800;    // Chat + Character
-const WINDOW_HEIGHT_COLLAPSED = 380;  // Character only
-const WINDOW_HEIGHT_EXPANDED = 1000;  // Chat + Character (more room for chat)
+// Base window dimension constants (at scale 1.0)
+const BASE_WIDTH_COLLAPSED = 160;   // Character only
+const BASE_HEIGHT_COLLAPSED = 380;  // Character only
+const BASE_WIDTH_EXPANDED = 800;    // Chat + Character
+const BASE_HEIGHT_EXPANDED = 1000;  // Chat + Character (more room for chat)
+const BASE_CANVAS_WIDTH = 240;      // Inner canvas width
+const BASE_CANVAS_HEIGHT = 600;     // Inner canvas height
 const CHAT_ANIMATION_DURATION = 300;  // ms (matches CSS transition)
 
 // Helper to send window move messages to the Rust backend via WebKit
@@ -43,6 +45,15 @@ function OverlayMode() {
   const setChatPanelOpen = useAppStore((state) => state.setChatPanelOpen);
   const isHiding = useAppStore((state) => state.character.isHiding);
   const setHiding = useAppStore((state) => state.setHiding);
+  const characterScale = useAppStore((state) => state.settings.characterScale);
+
+  // Scaled dimensions based on character scale setting
+  const scaledCollapsedWidth = Math.round(BASE_WIDTH_COLLAPSED * characterScale);
+  const scaledCollapsedHeight = Math.round(BASE_HEIGHT_COLLAPSED * characterScale);
+  const scaledExpandedWidth = BASE_WIDTH_EXPANDED - BASE_WIDTH_COLLAPSED + scaledCollapsedWidth;
+  const scaledExpandedHeight = Math.max(BASE_HEIGHT_EXPANDED, scaledCollapsedHeight);
+  const scaledCanvasWidth = Math.round(BASE_CANVAS_WIDTH * characterScale);
+  const scaledCanvasHeight = Math.round(BASE_CANVAS_HEIGHT * characterScale);
 
   // Drag state - track start position, not incremental deltas
   const isDragging = useRef(false);
@@ -72,19 +83,19 @@ function OverlayMode() {
     return () => window.removeEventListener('trayShow', handleTrayShow);
   }, [setHiding]);
 
-  // Resize window based on chat panel state
+  // Resize window based on chat panel state and character scale
   useEffect(() => {
     if (chatPanelOpen) {
       // Opening: resize immediately (expand first), then chat slides in
-      sendResizeMessage(WINDOW_WIDTH_EXPANDED, WINDOW_HEIGHT_EXPANDED);
+      sendResizeMessage(scaledExpandedWidth, scaledExpandedHeight);
     } else {
       // Closing: wait for slide-out animation to complete, then resize
       const timer = setTimeout(() => {
-        sendResizeMessage(WINDOW_WIDTH_COLLAPSED, WINDOW_HEIGHT_COLLAPSED);
+        sendResizeMessage(scaledCollapsedWidth, scaledCollapsedHeight);
       }, CHAT_ANIMATION_DURATION);
       return () => clearTimeout(timer);
     }
-  }, [chatPanelOpen]);
+  }, [chatPanelOpen, scaledCollapsedWidth, scaledCollapsedHeight, scaledExpandedWidth, scaledExpandedHeight]);
 
   // Trigger hide sequence: set hiding state, wait for animation, then tell Rust to hide
   const triggerHide = useCallback(() => {
@@ -180,7 +191,7 @@ function OverlayMode() {
       {/* Content anchored to right edge - character always visible, chat expands left */}
       <div
         className="absolute right-0 top-0 h-full flex flex-row"
-        style={{ width: WINDOW_WIDTH_EXPANDED }}
+        style={{ width: scaledExpandedWidth }}
       >
         {/* Chat panel area - fixed width on left, content slides in */}
         <div className="w-[640px] h-full flex-shrink-0 overflow-hidden">
@@ -211,16 +222,24 @@ function OverlayMode() {
         {/* Outer div is viewport (clips overflow), inner div is fixed canvas size */}
         <div
           ref={dragElementRef}
-          className="w-[160px] h-full cursor-grab active:cursor-grabbing flex-shrink-0 transition-transform duration-700 ease-in overflow-hidden relative"
-          style={{ transform: isHiding ? 'translateX(100%)' : 'translateX(0)' }}
+          className="h-full cursor-grab active:cursor-grabbing flex-shrink-0 transition-transform duration-700 ease-in overflow-hidden relative"
+          style={{
+            width: scaledCollapsedWidth,
+            transform: isHiding ? 'translateX(100%)' : 'translateX(0)',
+          }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
         >
           {/* Fixed size canvas - positioned to center character in viewport */}
           <div
-            className="absolute w-[240px] h-[600px]"
-            style={{ left: '-40px', bottom: '0' }}
+            className="absolute"
+            style={{
+              width: scaledCanvasWidth,
+              height: scaledCanvasHeight,
+              left: -((scaledCanvasWidth - scaledCollapsedWidth) / 2),
+              bottom: 0,
+            }}
           >
             <CharacterCanvas disableControls />
           </div>
