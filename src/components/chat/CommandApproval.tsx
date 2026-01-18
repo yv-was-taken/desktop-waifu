@@ -12,28 +12,35 @@ export function CommandApproval() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedCommand, setEditedCommand] = useState('');
 
-  const isPendingApproval = execution.status === 'pending_approval' && !!execution.generatedCommand;
-
   // Keyboard shortcuts: Enter = approve, Escape = reject
   // Must be before early return to satisfy React's rules of hooks
   useEffect(() => {
-    if (!isPendingApproval || isEditing) {
-      return; // No shortcuts unless pending approval and not editing
+    if (isEditing) {
+      return;
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Get current state directly from store to avoid stale closures
+      const state = useAppStore.getState();
+      const { execution } = state;
+
+      // Only handle shortcuts if we're still in pending approval state
+      if (execution.status !== 'pending_approval' || !execution.generatedCommand) {
+        return;
+      }
+
       if (e.key === 'Enter') {
         e.preventDefault();
-        approveCommand();
+        state.approveCommand();
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        clearExecution();
+        state.clearExecution();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPendingApproval, isEditing, approveCommand, clearExecution]);
+  }, [isEditing]);
 
   if (execution.status !== 'pending_approval' || !execution.generatedCommand) {
     return null;

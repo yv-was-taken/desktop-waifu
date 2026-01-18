@@ -8,12 +8,19 @@ Desktop Waifu is a Tauri + React + TypeScript desktop application featuring anim
 
 ## Build Commands
 
+**IMPORTANT: Use `bun dev` for development, NOT `bun tauri dev`.**
+
+When asked about build/dev commands, always run `cat package.json | grep -A 15 '"scripts"'` to verify. Never assume based on conventions.
+
 ```bash
-bun dev              # Start Vite dev server (port 1420)
-bun build            # Type check + production build
-bun tauri dev        # Run full Tauri app in development
-bun tauri build      # Build production desktop app
+bun dev              # PRIMARY DEV COMMAND - Runs Vite + desktop-waifu-overlay together
+bun build            # Type check + production build (frontend + overlay)
 ```
+
+### Command Details
+- **`bun dev`**: This is the main development command. It runs both the Vite dev server (port 1420) AND the desktop-waifu-overlay Rust binary concurrently. Use this for all development and testing.
+- **`bun tauri dev`**: Do NOT use this. It runs Tauri's CLI dev command which is separate from our overlay architecture.
+- **`bun dev:web`**: Runs only the Vite frontend (no overlay). Use for frontend-only debugging.
 
 ## Architecture
 
