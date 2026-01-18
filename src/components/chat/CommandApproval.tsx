@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useAppStore } from '../../store';
@@ -11,6 +11,29 @@ export function CommandApproval() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editedCommand, setEditedCommand] = useState('');
+
+  const isPendingApproval = execution.status === 'pending_approval' && !!execution.generatedCommand;
+
+  // Keyboard shortcuts: Enter = approve, Escape = reject
+  // Must be before early return to satisfy React's rules of hooks
+  useEffect(() => {
+    if (!isPendingApproval || isEditing) {
+      return; // No shortcuts unless pending approval and not editing
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        approveCommand();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        clearExecution();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPendingApproval, isEditing, approveCommand, clearExecution]);
 
   if (execution.status !== 'pending_approval' || !execution.generatedCommand) {
     return null;
@@ -99,7 +122,7 @@ export function CommandApproval() {
               onClick={handleApprove}
               className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2 px-4 rounded text-sm font-medium transition-colors"
             >
-              Approve
+              Approve (Enter)
             </button>
             <button
               onClick={handleEdit}
@@ -111,7 +134,7 @@ export function CommandApproval() {
               onClick={handleReject}
               className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 px-4 rounded text-sm font-medium transition-colors"
             >
-              Reject
+              Reject (Esc)
             </button>
           </>
         )}
