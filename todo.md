@@ -5,8 +5,6 @@
     - idle animations (cycle between some? currently just one)
     - talking animation is bad. either replace it or get rid of it, can supplement response fetching with a spin or something similar
     - running animation for hiding/unhiding
-- syntax highlighting for code responses
-- copy chat messages button
 - desktop code execution? (similar to claude code, can run scripts in shell, ask for permissions, etc, can read files, write files, run comamnds)
 - add ability to enlarge chat in settings
 - ability to enlarge model in settings
