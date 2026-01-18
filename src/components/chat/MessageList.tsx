@@ -127,6 +127,10 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
     <div
       ref={scrollRef}
       className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 chat-scroll"
+      onMouseDown={(e) => {
+        // Prevent clicks from stealing focus from textarea (Slack/Discord behavior)
+        e.preventDefault();
+      }}
     >
       {showSetup ? (
         <ApiKeySetup />
