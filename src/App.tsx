@@ -5,27 +5,8 @@ import { SettingsModal, TitleBar } from './components/ui';
 import { useAppStore } from './store';
 
 // Check if we're in overlay mode (desktop pet mode)
+// Window interface types are declared in src/lib/platform.ts
 const isOverlayMode = new URLSearchParams(window.location.search).get('overlay') === 'true';
-
-// Extend Window interface for WebKit message handlers (injected by WebKitGTK)
-declare global {
-  interface Window {
-    webkit?: {
-      messageHandlers?: {
-        moveWindow?: { postMessage: (msg: { action: string; offsetX?: number; offsetY?: number }) => void };
-        windowControl?: { postMessage: (msg: { action: 'hide' | 'show' }) => void };
-        resizeWindow?: { postMessage: (msg: { action: 'resize'; width: number }) => void };
-        debug?: { postMessage: (msg: { message: string }) => void };
-        keyboardFocus?: { postMessage: (msg: object) => void };
-      };
-    };
-  }
-}
-
-// Debug logging helper - logs to Rust console
-function debugLog(message: string) {
-  window.webkit?.messageHandlers?.debug?.postMessage({ message });
-}
 
 // Request keyboard focus from compositor (for Wayland layer-shell)
 function requestKeyboardFocus() {
@@ -209,17 +190,14 @@ function OverlayMode() {
             onTransitionEnd={(e) => {
               // Only handle transform transitions on this element when opening
               if (e.propertyName === 'transform' && e.target === e.currentTarget && chatPanelOpen) {
-                debugLog('transitionend fired - panel opened');
                 // Small delay after transition to focus after whatever steals focus
                 setTimeout(() => {
                   // Request keyboard focus from compositor first
                   requestKeyboardFocus();
 
                   const textarea = document.querySelector('textarea');
-                  debugLog(`textarea found: ${!!textarea}`);
                   if (textarea) {
                     (textarea as HTMLTextAreaElement).focus();
-                    debugLog('focus() called');
                   }
                 }, 50);
               }

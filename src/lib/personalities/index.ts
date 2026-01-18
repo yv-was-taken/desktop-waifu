@@ -1,4 +1,4 @@
-import { basePrompt } from './base-prompt';
+import { basePrompt, getCommandExecutionPrompt } from './base-prompt';
 import { emotionPrompt } from './emotion-prompt';
 import { getDetailPrompt } from './detail-prompts';
 import { naiveGirlfriend } from './definitions/naive-girlfriend';
@@ -9,6 +9,7 @@ import { lifeCoach } from './definitions/life-coach';
 import { creativePartner } from './definitions/creative-partner';
 import { assistant } from './definitions/assistant';
 import type { Personality, PersonalityId, PersonalitySettings } from './types';
+import type { SystemInfo } from '../../types';
 
 export const personalities: Record<PersonalityId, Personality> = {
   'naive-girlfriend': naiveGirlfriend,
@@ -20,7 +21,7 @@ export const personalities: Record<PersonalityId, Personality> = {
   assistant: assistant,
 };
 
-export function buildSystemPrompt(settings: PersonalitySettings): string {
+export function buildSystemPrompt(settings: PersonalitySettings, systemInfo: SystemInfo | null = null): string {
   const personality = personalities[settings.selectedPersonality];
 
   let prompt = basePrompt;
@@ -48,6 +49,9 @@ export function buildSystemPrompt(settings: PersonalitySettings): string {
         `and reference relevant concepts, best practices, and current developments in the field.`;
     }
   }
+
+  // Add command execution capabilities with system context
+  prompt += '\n\n' + getCommandExecutionPrompt(systemInfo);
 
   // Always end with emotion instructions
   prompt += '\n\n' + emotionPrompt;

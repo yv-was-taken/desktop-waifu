@@ -50,6 +50,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   emotion?: string;
+  htmlContent?: string; // Pre-rendered HTML (e.g., ANSI-colored terminal output)
 }
 
 // Settings Types
@@ -93,4 +94,37 @@ export interface PersonalitySettings {
   detailLevel: DetailLevel;
   assistantSubject?: string;
   customSubject?: string;
+}
+
+// Code Execution Types
+export type ExecutionStatus =
+  | 'idle'
+  | 'generating'
+  | 'pending_approval'
+  | 'executing'
+  | 'completed'
+  | 'failed';
+
+export interface CommandOutput {
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+}
+
+export interface CodeExecutionState {
+  status: ExecutionStatus;
+  task: string | null;
+  generatedCommand: string | null;
+  output: CommandOutput | null;
+  error: string | null;
+  approved: boolean; // CRITICAL: Commands can ONLY execute when explicitly approved by user
+}
+
+// System Info Types
+export interface SystemInfo {
+  os: string;
+  arch: string;
+  distro: string | null;
+  shell: string | null;
+  package_manager: string | null;
 }

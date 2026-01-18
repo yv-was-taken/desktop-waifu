@@ -156,6 +156,7 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
           : { text: message.content, emotion: null };
 
         const isUser = message.role === 'user';
+        const hasHtmlContent = !!message.htmlContent;
 
         return (
           <div
@@ -169,32 +170,39 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
                   : 'bg-[#111111] text-white border-2 border-slate-600 [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%,0_8px)]'
               }`}
             >
-              <div className={`text-sm leading-relaxed break-words prose prose-sm max-w-none prose-invert`}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    code({ className, children, ...props }) {
-                      const match = /language-(\w+)/.exec(className || '');
-                      const isInline = !match && !className;
-                      return isInline ? (
-                        <code className={`${isUser ? 'bg-slate-700' : 'bg-slate-700'} px-1 py-0.5 rounded text-xs`} {...props}>
-                          {children}
-                        </code>
-                      ) : (
-                        <SyntaxHighlighter
-                          style={oneDark}
-                          language={match?.[1] || 'text'}
-                          PreTag="div"
-                          className="rounded-md text-xs !my-2"
-                        >
-                          {String(children).replace(/\n$/, '')}
-                        </SyntaxHighlighter>
-                      );
-                    },
-                  }}
-                >
-                  {text}
-                </ReactMarkdown>
+              <div className={`text-sm leading-relaxed break-words ${hasHtmlContent ? '' : 'prose prose-sm max-w-none prose-invert'}`}>
+                {hasHtmlContent ? (
+                  <div
+                    className="terminal-container"
+                    dangerouslySetInnerHTML={{ __html: message.htmlContent! }}
+                  />
+                ) : (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      code({ className, children, ...props }) {
+                        const match = /language-(\w+)/.exec(className || '');
+                        const isInline = !match && !className;
+                        return isInline ? (
+                          <code className={`${isUser ? 'bg-slate-700' : 'bg-slate-700'} px-1 py-0.5 rounded text-xs`} {...props}>
+                            {children}
+                          </code>
+                        ) : (
+                          <SyntaxHighlighter
+                            style={oneDark}
+                            language={match?.[1] || 'text'}
+                            PreTag="div"
+                            className="rounded-md text-xs !my-2"
+                          >
+                            {String(children).replace(/\n$/, '')}
+                          </SyntaxHighlighter>
+                        );
+                      },
+                    }}
+                  >
+                    {text}
+                  </ReactMarkdown>
+                )}
               </div>
               {emotion && (
                 <span className={`text-xs mt-1 block italic ${isUser ? 'text-slate-400' : 'text-slate-400'}`}>

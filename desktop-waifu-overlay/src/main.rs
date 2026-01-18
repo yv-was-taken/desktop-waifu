@@ -139,14 +139,8 @@ fn build_ui(app: &Application) {
     content_manager.register_script_message_handler("keyboardFocus", None);
 
     let webview_for_focus = webview.clone();
-    let window_for_focus = window.clone();
     content_manager.connect_script_message_received(Some("keyboardFocus"), move |_manager, _js_value| {
-        info!("Requesting keyboard focus:");
-        info!("  window.is_active: {}", window_for_focus.is_active());
-        info!("  webview.has_focus BEFORE grab: {}", webview_for_focus.has_focus());
-        let result = webview_for_focus.grab_focus();
-        info!("  grab_focus() returned: {}", result);
-        info!("  webview.has_focus AFTER grab: {}", webview_for_focus.has_focus());
+        webview_for_focus.grab_focus();
     });
 
     // Set up tray message handler on GTK main loop
@@ -160,9 +154,7 @@ fn build_ui(app: &Application) {
             while let Ok(msg) = receiver.try_recv() {
                 match msg {
                     TrayMessage::Show => {
-                        info!("Tray: Show requested");
                         window_for_tray.present();
-                        // Notify WebView to reset state and play show animation
                         webview_for_tray.evaluate_javascript(
                             "window.dispatchEvent(new CustomEvent('trayShow'))",
                             None,
@@ -175,14 +167,12 @@ fn build_ui(app: &Application) {
                         }
                     }
                     TrayMessage::Hide => {
-                        info!("Tray: Hide requested");
                         window_for_tray.hide();
                         if let Some(ref handle) = tray_handle_for_update {
                             update_tray_visibility(handle, false);
                         }
                     }
                     TrayMessage::Quit => {
-                        info!("Tray: Quit requested");
                         window_for_tray.close();
                         return glib::ControlFlow::Break;
                     }
@@ -199,11 +189,8 @@ fn build_ui(app: &Application) {
 
     // When window loses focus (user clicks away), switch to OnDemand mode
     // so other apps can receive keyboard input.
-    // When they click back on the overlay, OnDemand will let them regain focus.
     window.connect_is_active_notify(|w| {
-        info!("Window is_active changed to: {}", w.is_active());
         if !w.is_active() {
-            info!("User clicked away - switching to OnDemand mode");
             w.set_keyboard_mode(KeyboardMode::OnDemand);
         }
     });
@@ -251,8 +238,11 @@ fn create_webview_with_handlers(
     // Register the "resizeWindow" message handler for dynamic width adjustment
     content_manager.register_script_message_handler("resizeWindow", None);
 
-    // Register debug logging handler
-    content_manager.register_script_message_handler("debug", None);
+    // Register the "executeCommand" message handler for shell command execution
+    content_manager.register_script_message_handler("executeCommand", None);
+
+    // Register the "getSystemInfo" message handler
+    content_manager.register_script_message_handler("getSystemInfo", None);
 
     // Clone window for the closure
     let window_clone = window.clone();
@@ -275,7 +265,6 @@ fn create_webview_with_handlers(
                             bottom: pos.bottom,
                             right: pos.right,
                         };
-                        info!("Drag started at margins: right={}, bottom={}", pos.right, pos.bottom);
                     }
                     "drag" => {
                         let drag = drag_state.borrow();
@@ -307,8 +296,6 @@ fn create_webview_with_handlers(
                     "endDrag" => {
                         let mut drag = drag_state.borrow_mut();
                         drag.is_dragging = false;
-                        let pos = position.borrow();
-                        info!("Drag ended at margins: right={}, bottom={}", pos.right, pos.bottom);
                     }
                     _ => {}
                 }
@@ -327,7 +314,6 @@ fn create_webview_with_handlers(
 
                 match action {
                     "hide" => {
-                        info!("WebView requested hide");
                         // Wait for the hide animation to complete (800ms), then hide window
                         let win = window_for_control.clone();
                         let handle = tray_handle.clone();
@@ -339,7 +325,6 @@ fn create_webview_with_handlers(
                         });
                     }
                     "show" => {
-                        info!("WebView requested show");
                         window_for_control.present();
                         if let Some(ref handle) = tray_handle {
                             update_tray_visibility(handle, true);
@@ -364,7 +349,6 @@ fn create_webview_with_handlers(
                     "resize" => {
                         let width = parsed["width"].as_i64().unwrap_or(WINDOW_WIDTH_EXPANDED as i64) as i32;
                         let height = parsed["height"].as_i64().unwrap_or(WINDOW_HEIGHT_EXPANDED as i64) as i32;
-                        info!("WebView requested resize to {}x{}", width, height);
                         window_for_resize.set_default_width(width);
                         window_for_resize.set_default_height(height);
 
@@ -375,11 +359,8 @@ fn create_webview_with_handlers(
                         let window_clone = window_for_resize.clone();
                         glib::timeout_add_local_once(Duration::from_millis(50), move || {
                             if is_expanding {
-                                info!("Chat opening - switching to Exclusive mode for keyboard input");
                                 window_clone.set_keyboard_mode(KeyboardMode::Exclusive);
-                                // OnDemand mode is restored when user clicks outside (is_active becomes false)
                             } else {
-                                info!("Chat closing - switching to OnDemand mode");
                                 window_clone.set_keyboard_mode(KeyboardMode::OnDemand);
                             }
                         });
@@ -390,15 +371,9 @@ fn create_webview_with_handlers(
         }
     });
 
-    // Connect to debug message handler for logging from JavaScript
-    content_manager.connect_script_message_received(Some("debug"), move |_manager, js_value| {
-        if let Some(json_str) = js_value.to_json(0) {
-            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
-                let msg = parsed["message"].as_str().unwrap_or("");
-                info!("[JS] {}", msg);
-            }
-        }
-    });
+    // Connect to executeCommand message handler for shell command execution
+    // We need to create the WebView first to pass it to the handler, so we'll set this up after
+    // For now, we'll use a simpler synchronous approach with std::process::Command
 
     // Create WebView with the content manager
     let webview = WebView::builder()
@@ -409,7 +384,143 @@ fn create_webview_with_handlers(
     // Make WebView background transparent (RGBA with 0 alpha)
     webview.set_background_color(&gtk4::gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
 
-    info!("WebView created with drag and window control handlers");
+    // Set up executeCommand handler (needs webview reference for callback)
+    let webview_for_exec = webview.clone();
+    content_manager.connect_script_message_received(Some("executeCommand"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let cmd = parsed["cmd"].as_str().unwrap_or("").to_string();
+                let callback_id = parsed["callbackId"].as_str().unwrap_or("").to_string();
+
+                if cmd.is_empty() {
+                    return;
+                }
+
+                info!("Executing command: {}", cmd);
+
+                // Use channel to communicate result back to main thread
+                let (tx, rx) = std::sync::mpsc::channel::<String>();
+
+                // Spawn thread for command execution
+                std::thread::spawn(move || {
+                    let output = std::process::Command::new("sh")
+                        .arg("-c")
+                        .arg(&cmd)
+                        .output();
+
+                    let (stdout, stderr, exit_code) = match output {
+                        Ok(out) => (
+                            String::from_utf8_lossy(&out.stdout).to_string(),
+                            String::from_utf8_lossy(&out.stderr).to_string(),
+                            out.status.code().unwrap_or(-1),
+                        ),
+                        Err(e) => (String::new(), e.to_string(), -1),
+                    };
+
+                    info!("Command completed with exit code: {}", exit_code);
+
+                    // Escape strings for JavaScript
+                    let stdout_escaped = stdout.replace('\\', "\\\\").replace('`', "\\`").replace("${", "\\${");
+                    let stderr_escaped = stderr.replace('\\', "\\\\").replace('`', "\\`").replace("${", "\\${");
+
+                    let js = format!(
+                        r#"window.__commandCallbacks && window.__commandCallbacks['{}'] && window.__commandCallbacks['{}']( {{ stdout: `{}`, stderr: `{}`, exit_code: {} }} )"#,
+                        callback_id, callback_id, stdout_escaped, stderr_escaped, exit_code
+                    );
+
+                    let _ = tx.send(js);
+                });
+
+                // Poll for result on main thread
+                let webview = webview_for_exec.clone();
+                glib::timeout_add_local(Duration::from_millis(10), move || {
+                    match rx.try_recv() {
+                        Ok(js) => {
+                            webview.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
+                            glib::ControlFlow::Break
+                        }
+                        Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+                    }
+                });
+            }
+        }
+    });
+
+    // Set up getSystemInfo handler
+    let webview_for_sysinfo = webview.clone();
+    content_manager.connect_script_message_received(Some("getSystemInfo"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let callback_id = parsed["callbackId"].as_str().unwrap_or("").to_string();
+
+                let (tx, rx) = std::sync::mpsc::channel::<String>();
+
+                std::thread::spawn(move || {
+                    let os = std::env::consts::OS.to_string();
+                    let arch = std::env::consts::ARCH.to_string();
+                    let shell = std::env::var("SHELL").ok();
+
+                    // Get distro from /etc/os-release
+                    let distro = if os == "linux" {
+                        std::process::Command::new("sh")
+                            .arg("-c")
+                            .arg("cat /etc/os-release 2>/dev/null | grep -E '^NAME=' | head -1 | cut -d= -f2 | tr -d '\"'")
+                            .output()
+                            .ok()
+                            .and_then(|out| {
+                                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                                if s.is_empty() { None } else { Some(s) }
+                            })
+                    } else {
+                        None
+                    };
+
+                    // Detect package manager
+                    let package_manager = if os == "linux" {
+                        let managers = ["apt", "dnf", "yum", "pacman", "zypper", "apk"];
+                        let mut found = None;
+                        for mgr in managers {
+                            if let Ok(out) = std::process::Command::new("which").arg(mgr).output() {
+                                if out.status.success() {
+                                    found = Some(mgr.to_string());
+                                    break;
+                                }
+                            }
+                        }
+                        found
+                    } else {
+                        None
+                    };
+
+                    // Build JSON response
+                    let distro_json = distro.map(|d| format!("\"{}\"", d)).unwrap_or("null".to_string());
+                    let shell_json = shell.map(|s| format!("\"{}\"", s)).unwrap_or("null".to_string());
+                    let pkg_json = package_manager.map(|p| format!("\"{}\"", p)).unwrap_or("null".to_string());
+
+                    let js = format!(
+                        r#"window.__commandCallbacks && window.__commandCallbacks['{}'] && window.__commandCallbacks['{}']( {{ os: "{}", arch: "{}", distro: {}, shell: {}, package_manager: {} }} )"#,
+                        callback_id, callback_id, os, arch, distro_json, shell_json, pkg_json
+                    );
+
+                    let _ = tx.send(js);
+                });
+
+                // Poll for result on main thread
+                let webview = webview_for_sysinfo.clone();
+                glib::timeout_add_local(Duration::from_millis(10), move || {
+                    match rx.try_recv() {
+                        Ok(js) => {
+                            webview.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
+                            glib::ControlFlow::Break
+                        }
+                        Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+                    }
+                });
+            }
+        }
+    });
 
     webview
 }

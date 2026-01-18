@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ChatMessage, LLMProviderType, PersonalityId, DetailLevel } from '../types';
+import type {
+  ChatMessage,
+  LLMProviderType,
+  PersonalityId,
+  DetailLevel,
+  ExecutionStatus,
+  CommandOutput,
+  CodeExecutionState,
+} from '../types';
 
 interface CharacterState {
   isLoaded: boolean;
@@ -36,6 +44,8 @@ interface UIState {
   chatPanelOpen: boolean;
 }
 
+interface ExecutionState extends CodeExecutionState {}
+
 interface AppState {
   // Character
   character: CharacterState;
@@ -61,6 +71,16 @@ interface AppState {
   ui: UIState;
   setChatPanelOpen: (open: boolean) => void;
   toggleChatPanel: () => void;
+
+  // Code Execution
+  execution: ExecutionState;
+  setExecutionStatus: (status: ExecutionStatus) => void;
+  setGeneratedCommand: (task: string, command: string) => void;
+  approveCommand: () => void; // CRITICAL: Only way to approve command execution
+  setExecutionOutput: (output: CommandOutput) => void;
+  setExecutionError: (error: string) => void;
+  clearExecution: () => void;
+  updateGeneratedCommand: (command: string) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -164,6 +184,72 @@ export const useAppStore = create<AppState>()(
       toggleChatPanel: () =>
         set((state) => ({
           ui: { ...state.ui, chatPanelOpen: !state.ui.chatPanelOpen },
+        })),
+
+      // Code Execution state
+      // CRITICAL: `approved` must be explicitly set to true by user action before execution
+      execution: {
+        status: 'idle',
+        task: null,
+        generatedCommand: null,
+        output: null,
+        error: null,
+        approved: false,
+      },
+      setExecutionStatus: (status) =>
+        set((state) => ({
+          execution: { ...state.execution, status },
+        })),
+      setGeneratedCommand: (task, command) =>
+        set((state) => ({
+          execution: {
+            ...state.execution,
+            task,
+            generatedCommand: command,
+            status: 'pending_approval',
+            approved: false, // CRITICAL: Reset approval when new command is generated
+            error: null,
+          },
+        })),
+      // CRITICAL: This is the ONLY way to approve command execution
+      approveCommand: () =>
+        set((state) => ({
+          execution: {
+            ...state.execution,
+            approved: true,
+            status: 'executing',
+          },
+        })),
+      setExecutionOutput: (output) =>
+        set((state) => ({
+          execution: {
+            ...state.execution,
+            output,
+            status: output.exit_code === 0 ? 'completed' : 'failed',
+          },
+        })),
+      setExecutionError: (error) =>
+        set((state) => ({
+          execution: {
+            ...state.execution,
+            error,
+            status: 'failed',
+          },
+        })),
+      clearExecution: () =>
+        set(() => ({
+          execution: {
+            status: 'idle',
+            task: null,
+            generatedCommand: null,
+            output: null,
+            error: null,
+            approved: false, // CRITICAL: Always reset approval
+          },
+        })),
+      updateGeneratedCommand: (command) =>
+        set((state) => ({
+          execution: { ...state.execution, generatedCommand: command },
         })),
     }),
     {

@@ -1,10 +1,13 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { MessageList } from './MessageList';
 import { InputArea } from './InputArea';
+import { CommandApproval } from './CommandApproval';
 import { useAppStore } from '../../store';
 import { getProvider } from '../../lib/llm';
 import { buildSystemPrompt } from '../../lib/personalities';
-import type { LLMMessage } from '../../types';
+import { executeCommand as platformExecuteCommand, getSystemInfo } from '../../lib/platform';
+import AnsiToHtml from 'ansi-to-html';
+import type { LLMMessage, SystemInfo } from '../../types';
 
 interface ChatPanelProps {
   onClose?: () => void; // Optional close handler for overlay mode
@@ -21,6 +24,89 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   const toggleSettings = useAppStore((state) => state.toggleSettings);
   const clearMessages = useAppStore((state) => state.clearMessages);
 
+  // System info for command execution context
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+
+  // ANSI to HTML converter
+  const ansiConverter = useMemo(() => new AnsiToHtml({
+    fg: '#e2e8f0', // slate-200
+    bg: '#1e293b', // slate-800
+    newline: true,
+    escapeXML: true,
+  }), []);
+
+  // Code execution state
+  const execution = useAppStore((state) => state.execution);
+  const setExecutionStatus = useAppStore((state) => state.setExecutionStatus);
+  const clearExecution = useAppStore((state) => state.clearExecution);
+  const setGeneratedCommand = useAppStore((state) => state.setGeneratedCommand);
+
+  // Fetch system info on mount
+  useEffect(() => {
+    getSystemInfo()
+      .then(setSystemInfo)
+      .catch((err) => console.error('Failed to get system info:', err));
+  }, []);
+
+  // Execute command and display output as chat message
+  // CRITICAL: Only runs when status is 'executing' AND approved is explicitly true
+  useEffect(() => {
+    if (execution.status === 'executing' && execution.generatedCommand && execution.approved) {
+      const runCommand = async () => {
+        setExecutionStatus('completed');
+        try {
+          const output = await platformExecuteCommand(execution.generatedCommand!);
+
+          // Convert ANSI codes to HTML for terminal-style colored output
+          const stdoutHtml = ansiConverter.toHtml(output.stdout.trim());
+          let htmlContent = `<pre class="terminal-output">${stdoutHtml}</pre>`;
+
+          if (output.stderr) {
+            const stderrHtml = ansiConverter.toHtml(output.stderr.trim());
+            htmlContent += `<div class="terminal-error"><strong>Errors:</strong><pre class="terminal-output">${stderrHtml}</pre></div>`;
+          }
+          if (output.exit_code !== 0) {
+            htmlContent += `<div class="terminal-exit-code">Exit code: ${output.exit_code}</div>`;
+          }
+
+          // Plain text fallback for copy functionality
+          let plainContent = output.stdout.trim();
+          if (output.stderr) {
+            plainContent += `\n\nErrors:\n${output.stderr.trim()}`;
+          }
+          if (output.exit_code !== 0) {
+            plainContent += `\n\nExit code: ${output.exit_code}`;
+          }
+
+          addMessage({ role: 'assistant', content: plainContent, htmlContent });
+          clearExecution();
+        } catch (error) {
+          addMessage({
+            role: 'assistant',
+            content: `**Error:** ${error instanceof Error ? error.message : String(error)}`,
+          });
+          clearExecution();
+        }
+      };
+      runCommand();
+    }
+  }, [execution.status, execution.generatedCommand, execution.approved, setExecutionStatus, clearExecution, addMessage, ansiConverter]);
+
+  // Parse EXECUTE tag from LLM response
+  const parseExecuteTag = useCallback((response: string): { command: string; cleanResponse: string } | null => {
+    const executeMatch = response.match(/\[EXECUTE:\s*(.+?)\]/);
+    if (executeMatch) {
+      const command = executeMatch[1].trim();
+      // If command is empty, treat as parse failure
+      if (!command) {
+        return null;
+      }
+      const cleanResponse = response.replace(/\[EXECUTE:\s*.+?\]/, '').trim();
+      return { command, cleanResponse };
+    }
+    return null;
+  }, []);
+
   const handleSend = useCallback(async (content: string) => {
     if (!settings.apiKey) {
       // This shouldn't happen since input is disabled without API key
@@ -36,13 +122,13 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     try {
       const provider = getProvider(settings.llmProvider);
 
-      // Build system prompt from personality settings
+      // Build system prompt from personality settings with system info
       const systemPrompt = buildSystemPrompt({
         selectedPersonality: settings.selectedPersonality,
         detailLevel: settings.detailLevel,
         assistantSubject: settings.assistantSubject,
         customSubject: settings.customSubject,
-      });
+      }, systemInfo);
 
       // Build messages array with system prompt
       const llmMessages: LLMMessage[] = [
@@ -71,7 +157,18 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         setExpression(emotionMatch[1]);
       }
 
-      addMessage({ role: 'assistant', content: response });
+      // Check for EXECUTE tag in response
+      const executeResult = parseExecuteTag(response);
+      if (executeResult) {
+        // Only add message if there's surrounding text; otherwise CommandApproval provides context
+        if (executeResult.cleanResponse) {
+          addMessage({ role: 'assistant', content: executeResult.cleanResponse });
+        }
+        // Trigger command approval flow - CommandApproval component shows the command
+        setGeneratedCommand(content, executeResult.command);
+      } else {
+        addMessage({ role: 'assistant', content: response });
+      }
 
       // Calculate talking duration based on response length (roughly 50ms per character)
       const talkDuration = Math.min(Math.max(response.length * 50, 2000), 8000);
@@ -98,7 +195,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         setExpression('neutral');
       }, 3000);
     }
-  }, [settings, messages, addMessage, setThinking, setExpression, setTalking]);
+  }, [settings, messages, addMessage, setThinking, setExpression, setTalking, systemInfo, parseExecuteTag, setGeneratedCommand]);
 
   return (
     <div className="w-full h-full flex flex-col bg-slate-900/90 border border-slate-600">
@@ -146,6 +243,9 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
 
       {/* Messages */}
       <MessageList messages={messages} isTyping={isThinking} />
+
+      {/* Command Approval */}
+      <CommandApproval />
 
       {/* Input */}
       <InputArea onSend={handleSend} disabled={isThinking || !settings.apiKey} />
