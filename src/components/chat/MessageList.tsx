@@ -102,12 +102,19 @@ function ApiKeySetup() {
 export function MessageList({ messages, isTyping }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const apiKey = useAppStore((state) => state.settings.apiKey);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isTyping]);
+
+  const copyToClipboard = async (text: string, messageId: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedId(messageId);
+    setTimeout(() => setCopiedId(null), 1000);
+  };
 
   const parseEmotionTag = (content: string) => {
     const emotionMatch = content.match(/\[(happy|excited|thinking|curious|neutral|sad)\]$/);
@@ -153,7 +160,7 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
         return (
           <div
             key={message.id}
-            className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+            className={`group flex items-end gap-1 ${isUser ? 'justify-end' : 'justify-start'}`}
           >
             <div
               className={`max-w-[85%] relative px-4 py-3 ${
@@ -195,6 +202,19 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
                 </span>
               )}
             </div>
+            {!isUser && (
+              <button
+                onClick={() => copyToClipboard(text, message.id)}
+                className={`opacity-0 group-hover:opacity-100 transition-opacity duration-150 px-2 py-1 text-xs rounded cursor-pointer text-center min-w-[40px]
+                  ${copiedId === message.id
+                    ? 'bg-green-600 text-white scale-95'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                  }`}
+                title="Copy message"
+              >
+                {copiedId === message.id ? '✓' : 'Copy'}
+              </button>
+            )}
           </div>
         );
       })}
