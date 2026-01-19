@@ -43,6 +43,7 @@ interface SettingsState {
 
 interface UIState {
   chatPanelOpen: boolean;
+  isScaleSliderDragging: boolean;
 }
 
 interface ExecutionState extends CodeExecutionState {}
@@ -72,6 +73,7 @@ interface AppState {
   ui: UIState;
   setChatPanelOpen: (open: boolean) => void;
   toggleChatPanel: () => void;
+  setScaleSliderDragging: (dragging: boolean) => void;
 
   // Code Execution
   execution: ExecutionState;
@@ -178,6 +180,7 @@ export const useAppStore = create<AppState>()(
       // UI state (overlay mode)
       ui: {
         chatPanelOpen: false,
+        isScaleSliderDragging: false,
       },
       setChatPanelOpen: (open) =>
         set((state) => ({
@@ -186,6 +189,10 @@ export const useAppStore = create<AppState>()(
       toggleChatPanel: () =>
         set((state) => ({
           ui: { ...state.ui, chatPanelOpen: !state.ui.chatPanelOpen },
+        })),
+      setScaleSliderDragging: (dragging) =>
+        set((state) => ({
+          ui: { ...state.ui, isScaleSliderDragging: dragging },
         })),
 
       // Code Execution state

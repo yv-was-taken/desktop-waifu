@@ -48,6 +48,7 @@ function OverlayMode() {
   const setHiding = useAppStore((state) => state.setHiding);
   const characterScale = useAppStore((state) => state.settings.characterScale) ?? 1.0;
   const chatScale = useAppStore((state) => state.settings.chatScale) ?? 1.0;
+  const isScaleSliderDragging = useAppStore((state) => state.ui.isScaleSliderDragging);
 
   // Scaled character dimensions
   const scaledCharacterWidth = Math.round(BASE_WIDTH_COLLAPSED * characterScale);
@@ -82,6 +83,11 @@ function OverlayMode() {
   // Store ref to the drag element for pointer capture
   const dragElementRef = useRef<HTMLDivElement>(null);
 
+  // Track previous state for detecting changes
+  const prevChatPanelOpenRef = useRef(chatPanelOpen);
+  const prevDraggingRef = useRef(isScaleSliderDragging);
+  const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Handle "trayShow" event from Rust when user clicks Show in tray
   useEffect(() => {
     const handleTrayShow = () => {
@@ -93,19 +99,47 @@ function OverlayMode() {
     return () => window.removeEventListener('trayShow', handleTrayShow);
   }, [setHiding]);
 
-  // Resize window based on chat panel state and character scale
+  // Resize window based on chat panel state and scale
+  // Only resize on mouse release to prevent feedback loop during slider drag
   useEffect(() => {
-    if (chatPanelOpen) {
-      // Opening: resize immediately (expand first), then chat slides in
-      sendResizeMessage(scaledExpandedWidth, scaledExpandedHeight);
-    } else {
-      // Closing: wait for slide-out animation to complete, then resize
-      const timer = setTimeout(() => {
-        sendResizeMessage(scaledCollapsedWidth, scaledCollapsedHeight);
-      }, CHAT_ANIMATION_DURATION);
-      return () => clearTimeout(timer);
+    const panelToggled = prevChatPanelOpenRef.current !== chatPanelOpen;
+    const dragEnded = prevDraggingRef.current && !isScaleSliderDragging;
+    prevChatPanelOpenRef.current = chatPanelOpen;
+    prevDraggingRef.current = isScaleSliderDragging;
+
+    // Clear any pending resize
+    if (resizeTimeoutRef.current) {
+      clearTimeout(resizeTimeoutRef.current);
+      resizeTimeoutRef.current = null;
     }
-  }, [chatPanelOpen, scaledCollapsedWidth, scaledCollapsedHeight, scaledExpandedWidth, scaledExpandedHeight, scaledChatWidth, scaledChatHeight]);
+
+    const doResize = () => {
+      if (chatPanelOpen) {
+        sendResizeMessage(scaledExpandedWidth, scaledExpandedHeight);
+      } else {
+        sendResizeMessage(scaledCollapsedWidth, scaledCollapsedHeight);
+      }
+    };
+
+    if (panelToggled) {
+      // Panel open/close: immediate for open, delayed for close (wait for animation)
+      if (chatPanelOpen) {
+        doResize();
+      } else {
+        resizeTimeoutRef.current = setTimeout(doResize, CHAT_ANIMATION_DURATION);
+      }
+    } else if (dragEnded) {
+      // Slider drag ended: resize now with final scale values
+      doResize();
+    }
+    // If scale changed while dragging, do nothing - wait for drag to end
+
+    return () => {
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+    };
+  }, [chatPanelOpen, scaledCollapsedWidth, scaledCollapsedHeight, scaledExpandedWidth, scaledExpandedHeight, isScaleSliderDragging]);
 
   // Trigger hide sequence: set hiding state, wait for animation, then tell Rust to hide
   const triggerHide = useCallback(() => {

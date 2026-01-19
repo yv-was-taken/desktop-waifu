@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useAppStore } from '../../store';
 import { defaultModels } from '../../lib/llm';
 import { personalities } from '../../lib/personalities';
@@ -8,6 +9,16 @@ export function SettingsModal() {
   const settings = useAppStore((state) => state.settings);
   const updateSettings = useAppStore((state) => state.updateSettings);
   const toggleSettings = useAppStore((state) => state.toggleSettings);
+  const setScaleSliderDragging = useAppStore((state) => state.setScaleSliderDragging);
+
+  // Track when scale slider drag ends (mouseup anywhere on document)
+  useEffect(() => {
+    const handlePointerUp = () => {
+      setScaleSliderDragging(false);
+    };
+    document.addEventListener('pointerup', handlePointerUp);
+    return () => document.removeEventListener('pointerup', handlePointerUp);
+  }, [setScaleSliderDragging]);
 
   if (!settings.showSettings) return null;
 
@@ -193,6 +204,7 @@ export function SettingsModal() {
               max="2"
               step="0.1"
               value={settings.characterScale}
+              onPointerDown={() => setScaleSliderDragging(true)}
               onChange={(e) => updateSettings({ characterScale: parseFloat(e.target.value) })}
               className="w-full accent-teal-400"
             />
@@ -209,6 +221,7 @@ export function SettingsModal() {
               max="2"
               step="0.1"
               value={settings.chatScale ?? 1.0}
+              onPointerDown={() => setScaleSliderDragging(true)}
               onChange={(e) => updateSettings({ chatScale: parseFloat(e.target.value) })}
               className="w-full accent-teal-400"
             />
