@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useAppStore } from '../../store';
+import { debugLog } from '../../lib/debug';
 
 export function CommandApproval() {
   const execution = useAppStore((state) => state.execution);
@@ -11,7 +12,25 @@ export function CommandApproval() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editedCommand, setEditedCommand] = useState('');
+  const [shortcutsReady, setShortcutsReady] = useState(false);
   const approveButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Enable keyboard shortcuts after a delay to avoid capturing Enter from message send
+  useEffect(() => {
+    if (execution.status === 'pending_approval' && execution.generatedCommand) {
+      // Delay enabling shortcuts to avoid capturing Enter key that was used to send the message
+      // 200ms is enough for the key to fully release
+      const timeout = setTimeout(() => {
+        setShortcutsReady(true);
+      }, 200);
+      return () => {
+        clearTimeout(timeout);
+        setShortcutsReady(false);
+      };
+    } else {
+      setShortcutsReady(false);
+    }
+  }, [execution.status, execution.generatedCommand]);
 
   // Focus approve button when panel appears so Enter triggers it
   useEffect(() => {
@@ -28,7 +47,7 @@ export function CommandApproval() {
   // Keyboard shortcuts: Enter = approve, Escape = reject
   // Must be before early return to satisfy React's rules of hooks
   useEffect(() => {
-    if (isEditing) {
+    if (isEditing || !shortcutsReady) {
       return;
     }
 
@@ -53,9 +72,11 @@ export function CommandApproval() {
       }
 
       if (e.key === 'Enter') {
+        debugLog('[CMD APPROVAL] Enter key pressed, calling approveCommand from keyboard handler');
         e.preventDefault();
         state.approveCommand();
       } else if (e.key === 'Escape') {
+        debugLog('[CMD APPROVAL] Escape key pressed, calling clearExecution');
         e.preventDefault();
         state.clearExecution();
       }
@@ -63,7 +84,7 @@ export function CommandApproval() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isEditing]);
+  }, [isEditing, shortcutsReady]);
 
   if (execution.status !== 'pending_approval' || !execution.generatedCommand) {
     return null;
@@ -86,6 +107,7 @@ export function CommandApproval() {
 
   const handleApprove = () => {
     // CRITICAL: This is the ONLY user action that can approve command execution
+    debugLog('[CMD APPROVAL] handleApprove called (button click)');
     approveCommand();
   };
 

@@ -6,6 +6,7 @@ import { useAppStore } from '../../store';
 import { getProvider } from '../../lib/llm';
 import { buildSystemPrompt } from '../../lib/personalities';
 import { executeCommand as platformExecuteCommand, getSystemInfo } from '../../lib/platform';
+import { debugLog } from '../../lib/debug';
 import AnsiToHtml from 'ansi-to-html';
 import type { LLMMessage, SystemInfo } from '../../types';
 
@@ -13,7 +14,11 @@ interface ChatPanelProps {
   onClose?: () => void; // Optional close handler for overlay mode
 }
 
+// Debug: Log when this module loads
+debugLog('[CHATPANEL] Module loaded');
+
 export function ChatPanel({ onClose }: ChatPanelProps) {
+  debugLog('[CHATPANEL] Component rendering');
   const messages = useAppStore((state) => state.chat.messages);
   const isThinking = useAppStore((state) => state.chat.isThinking);
   const settings = useAppStore((state) => state.settings);
@@ -51,14 +56,18 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   // Execute command and display output as chat message
   // CRITICAL: Only runs when status is 'executing' AND approved is explicitly true
   useEffect(() => {
+    debugLog(`[EXEC EFFECT] Checking: status=${execution.status}, cmd=${execution.generatedCommand}, approved=${execution.approved}`);
     if (execution.status === 'executing' && execution.generatedCommand && execution.approved) {
+      debugLog('[EXEC EFFECT] Conditions met, executing command');
       // Reset approved immediately to prevent race conditions with new commands
       useAppStore.setState((state) => ({
         execution: { ...state.execution, approved: false }
       }));
+      debugLog(`[EXEC EFFECT] After reset: approved=${useAppStore.getState().execution.approved}`);
 
       const runCommand = async () => {
         try {
+          debugLog(`[EXEC EFFECT] Running command: ${execution.generatedCommand}`);
           const output = await platformExecuteCommand(execution.generatedCommand!);
 
           // Convert ANSI codes to HTML for terminal-style colored output
@@ -144,6 +153,10 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         { role: 'user', content },
       ];
 
+      debugLog(`[LLM] Sending ${llmMessages.length} messages to ${settings.llmProvider}/${settings.llmModel}`);
+      debugLog(`[LLM] System prompt length: ${llmMessages[0]?.content?.length || 0}`);
+      debugLog(`[LLM] System prompt includes EXECUTE instruction: ${llmMessages[0]?.content?.includes('[EXECUTE:') || false}`);
+
       const response = await provider.chat(llmMessages, {
         apiKey: settings.apiKey,
         model: settings.llmModel,
@@ -155,16 +168,24 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       setThinking(false);
       setTalking(true);
 
+      debugLog(`[LLM] Response received, length=${response.length}`);
+      debugLog(`[LLM] Response preview: ${response.substring(0, 200)}`);
+
       // Check for EXECUTE tag in response
       const executeResult = parseExecuteTag(response);
+      debugLog(`[LLM] parseExecuteTag result: ${executeResult ? `command="${executeResult.command}"` : 'null'}`);
+
       if (executeResult) {
+        debugLog(`[LLM] EXECUTE tag found, calling setGeneratedCommand`);
         // Only add message if there's surrounding text; otherwise CommandApproval provides context
         if (executeResult.cleanResponse) {
           addMessage({ role: 'assistant', content: executeResult.cleanResponse });
         }
         // Trigger command approval flow - CommandApproval component shows the command
         setGeneratedCommand(content, executeResult.command);
+        debugLog(`[LLM] setGeneratedCommand called, current status=${useAppStore.getState().execution.status}`);
       } else {
+        debugLog(`[LLM] No EXECUTE tag, adding as regular message`);
         addMessage({ role: 'assistant', content: response });
       }
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { debugLog } from '../lib/debug';
 import type {
   ChatMessage,
   LLMProviderType,
@@ -222,26 +223,34 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           execution: { ...state.execution, status },
         })),
-      setGeneratedCommand: (task, command) =>
-        set((state) => ({
+      setGeneratedCommand: (task, command) => {
+        debugLog(`[EXEC] setGeneratedCommand: task="${task}", command="${command}"`);
+        set(() => ({
           execution: {
-            ...state.execution,
+            status: 'pending_approval',
             task,
             generatedCommand: command,
-            status: 'pending_approval',
-            approved: false, // CRITICAL: Reset approval when new command is generated
+            output: null,
             error: null,
+            approved: false, // CRITICAL: Reset approval when new command is generated
           },
-        })),
+        }));
+        debugLog(`[EXEC] After setGeneratedCommand: approved=${useAppStore.getState().execution.approved}`);
+      },
       // CRITICAL: This is the ONLY way to approve command execution
-      approveCommand: () =>
+      approveCommand: () => {
+        debugLog('[EXEC] approveCommand called');
+        // Log stack trace to find caller
+        debugLog(`[EXEC] Call stack: ${new Error().stack?.split('\n').slice(1, 4).join(' <- ')}`);
         set((state) => ({
           execution: {
             ...state.execution,
             approved: true,
             status: 'executing',
           },
-        })),
+        }));
+        debugLog(`[EXEC] After approveCommand: approved=${useAppStore.getState().execution.approved}`);
+      },
       setExecutionOutput: (output) =>
         set((state) => ({
           execution: {
@@ -258,7 +267,8 @@ export const useAppStore = create<AppState>()(
             status: 'failed',
           },
         })),
-      clearExecution: () =>
+      clearExecution: () => {
+        debugLog('[EXEC] clearExecution called');
         set(() => ({
           execution: {
             status: 'idle',
@@ -268,7 +278,9 @@ export const useAppStore = create<AppState>()(
             error: null,
             approved: false, // CRITICAL: Always reset approval
           },
-        })),
+        }));
+        debugLog(`[EXEC] After clearExecution: approved=${useAppStore.getState().execution.approved}`);
+      },
       updateGeneratedCommand: (command) =>
         set((state) => ({
           execution: { ...state.execution, generatedCommand: command },

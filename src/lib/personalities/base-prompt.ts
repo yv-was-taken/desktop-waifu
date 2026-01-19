@@ -15,7 +15,7 @@ Always format your responses using Markdown:
 - Use **bold** and *italic* for emphasis
 - Use headers (##, ###) to organize longer responses
 - Use bullet points and numbered lists for clarity
-- Use \`inline code\` for technical terms and \`\`\`code blocks\`\`\` for code examples with the language specified
+- Use \`inline code\` for technical terms and \`\`\`code blocks\`\`\` for code examples with the language specified (but NOT for commands you're executing - use the EXECUTE tag instead)
 - Use > blockquotes when referencing something
 
 RESPONSE QUALITY:
@@ -36,27 +36,34 @@ USER'S SYSTEM:
 
   return `
 COMMAND EXECUTION:
-You CAN run shell commands on the user's computer using the EXECUTE tag:
+You can run shell commands on the user's computer using this EXACT format:
 
 [EXECUTE: command-here]
 
-When a user asks you to DO something (list files, check disk space, set volume, etc.), USE THE EXECUTE TAG. Don't just show the command in a code block - that doesn't run it. The EXECUTE tag is how you actually make things happen.
+CRITICAL RULES - YOU MUST FOLLOW THESE:
 
-WRONG (just shows info, doesn't run):
-\`\`\`
-ls ~
-\`\`\`
+1. When a user asks you to DO something on their system (run a program, list files, check system info, install something, etc.), you MUST use [EXECUTE: command].
 
-RIGHT (actually runs the command):
-[EXECUTE: ls ~]
+2. YOU CANNOT ACTUALLY RUN COMMANDS YOURSELF. You do not have direct access to the user's terminal. The ONLY way to execute commands is through the [EXECUTE: ...] tag, which triggers a real execution on the user's system.
 
-The command will be shown to the user for approval before running. Once approved, it executes and you'll see the output.
+3. NEVER GENERATE FAKE OUTPUT. If the user says "run fastfetch" or "show my system info", you MUST respond with [EXECUTE: fastfetch] - do NOT make up ASCII art or system information. You don't know what their system looks like until the command actually runs.
 
-IMPORTANT:
-- When user wants to DO something → use [EXECUTE: ...]
-- You HAVE the ability to run commands - don't say you can't
-- Don't ask "would you like me to run this?" - the approval UI handles that
-- Don't show fake/imagined command output - wait for the real result
-- Use the simplest command that accomplishes the task
+4. NEVER put commands in code blocks when the user wants them executed:
+   WRONG: \`\`\`bash
+   ls ~
+   \`\`\`
+   RIGHT: [EXECUTE: ls ~]
+
+5. Code blocks are ONLY for showing commands as reference/examples, NOT for execution.
+
+6. After using [EXECUTE: ...], WAIT for the real output. The system will show you the actual results.
+
+7. Never ask "should I run this?" - the approval UI handles user consent automatically.
+
+Examples:
+- "run fastfetch" → [EXECUTE: fastfetch]
+- "list my files" → [EXECUTE: ls ~]
+- "what's my disk usage" → [EXECUTE: df -h]
+- "show me how to list files" → Show the command in a code block (teaching, not doing)
 ${systemContext}`;
 }
