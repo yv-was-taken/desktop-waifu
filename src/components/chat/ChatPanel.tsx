@@ -151,12 +151,6 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       setThinking(false);
       setTalking(true);
 
-      // Extract emotion from response for expression
-      const emotionMatch = response.match(/\[(happy|excited|thinking|curious|neutral|sad)\]$/);
-      if (emotionMatch) {
-        setExpression(emotionMatch[1]);
-      }
-
       // Check for EXECUTE tag in response
       const executeResult = parseExecuteTag(response);
       if (executeResult) {
@@ -186,7 +180,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
 
       addMessage({
         role: 'assistant',
-        content: `Ah, something went wrong! ${error instanceof Error ? error.message : 'Unknown error'} [sad]`,
+        content: `Ah, something went wrong! ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
       setExpression('sad');
 

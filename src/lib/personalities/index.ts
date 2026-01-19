@@ -1,5 +1,4 @@
 import { basePrompt, getCommandExecutionPrompt } from './base-prompt';
-import { emotionPrompt } from './emotion-prompt';
 import { getDetailPrompt } from './detail-prompts';
 import { naiveGirlfriend } from './definitions/naive-girlfriend';
 import { smartGirlfriend } from './definitions/smart-girlfriend';
@@ -52,9 +51,6 @@ export function buildSystemPrompt(settings: PersonalitySettings, systemInfo: Sys
 
   // Add command execution capabilities with system context
   prompt += '\n\n' + getCommandExecutionPrompt(systemInfo);
-
-  // Always end with emotion instructions
-  prompt += '\n\n' + emotionPrompt;
 
   return prompt;
 }

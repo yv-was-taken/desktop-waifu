@@ -116,17 +116,6 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
     setTimeout(() => setCopiedId(null), 1000);
   };
 
-  const parseEmotionTag = (content: string) => {
-    const emotionMatch = content.match(/\[(happy|excited|thinking|curious|neutral|sad)\]$/);
-    if (emotionMatch) {
-      return {
-        text: content.replace(emotionMatch[0], '').trim(),
-        emotion: emotionMatch[1],
-      };
-    }
-    return { text: content, emotion: null };
-  };
-
   // Show API key setup if no key is set
   const showSetup = !apiKey && messages.length === 0;
 
@@ -151,10 +140,6 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
       ) : null}
 
       {messages.map((message) => {
-        const { text, emotion } = message.role === 'assistant'
-          ? parseEmotionTag(message.content)
-          : { text: message.content, emotion: null };
-
         const isUser = message.role === 'user';
         const hasHtmlContent = !!message.htmlContent;
 
@@ -200,19 +185,14 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
                       },
                     }}
                   >
-                    {text}
+                    {message.content}
                   </ReactMarkdown>
                 )}
               </div>
-              {emotion && (
-                <span className={`text-xs mt-1 block italic ${isUser ? 'text-slate-400' : 'text-slate-400'}`}>
-                  *{emotion}*
-                </span>
-              )}
             </div>
             {!isUser && (
               <button
-                onClick={() => copyToClipboard(text, message.id)}
+                onClick={() => copyToClipboard(message.content, message.id)}
                 className={`opacity-0 group-hover:opacity-100 transition-opacity duration-150 px-2 py-1 text-xs rounded cursor-pointer text-center min-w-[40px]
                   ${copiedId === message.id
                     ? 'bg-green-600 text-white scale-95'
