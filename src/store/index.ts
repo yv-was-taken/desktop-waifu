@@ -44,6 +44,10 @@ interface SettingsState {
 interface UIState {
   chatPanelOpen: boolean;
   isScaleSliderDragging: boolean;
+  quadrant: {
+    isRightHalf: boolean;
+    isBottomHalf: boolean;
+  };
 }
 
 interface ExecutionState extends CodeExecutionState {}
@@ -74,6 +78,7 @@ interface AppState {
   setChatPanelOpen: (open: boolean) => void;
   toggleChatPanel: () => void;
   setScaleSliderDragging: (dragging: boolean) => void;
+  setQuadrant: (isRightHalf: boolean, isBottomHalf: boolean) => void;
 
   // Code Execution
   execution: ExecutionState;
@@ -181,6 +186,10 @@ export const useAppStore = create<AppState>()(
       ui: {
         chatPanelOpen: false,
         isScaleSliderDragging: false,
+        quadrant: {
+          isRightHalf: true,  // Default: bottom-right corner
+          isBottomHalf: true,
+        },
       },
       setChatPanelOpen: (open) =>
         set((state) => ({
@@ -193,6 +202,10 @@ export const useAppStore = create<AppState>()(
       setScaleSliderDragging: (dragging) =>
         set((state) => ({
           ui: { ...state.ui, isScaleSliderDragging: dragging },
+        })),
+      setQuadrant: (isRightHalf, isBottomHalf) =>
+        set((state) => ({
+          ui: { ...state.ui, quadrant: { isRightHalf, isBottomHalf } },
         })),
 
       // Code Execution state
