@@ -10,8 +10,10 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevExecutionStatusRef = useRef<string | null>(null);
 
   const setUserTyping = useAppStore((state) => state.setUserTyping);
+  const executionStatus = useAppStore((state) => state.execution.status);
 
   // Handle typing state with debounce
   const handleInputChange = useCallback((value: string) => {
@@ -79,6 +81,17 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
       }
     };
   }, []);
+
+  // Refocus input when command approval flow completes
+  useEffect(() => {
+    const prevStatus = prevExecutionStatusRef.current;
+    prevExecutionStatusRef.current = executionStatus;
+
+    // If we just left pending_approval state, refocus the input
+    if (prevStatus === 'pending_approval' && executionStatus !== 'pending_approval') {
+      textareaRef.current?.focus();
+    }
+  }, [executionStatus]);
 
   // Auto-focus textarea when window gains focus
   useEffect(() => {

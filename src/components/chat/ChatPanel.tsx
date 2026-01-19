@@ -52,8 +52,12 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   // CRITICAL: Only runs when status is 'executing' AND approved is explicitly true
   useEffect(() => {
     if (execution.status === 'executing' && execution.generatedCommand && execution.approved) {
+      // Reset approved immediately to prevent race conditions with new commands
+      useAppStore.setState((state) => ({
+        execution: { ...state.execution, approved: false }
+      }));
+
       const runCommand = async () => {
-        setExecutionStatus('completed');
         try {
           const output = await platformExecuteCommand(execution.generatedCommand!);
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useAppStore } from '../../store';
@@ -11,6 +11,19 @@ export function CommandApproval() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editedCommand, setEditedCommand] = useState('');
+  const approveButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Focus approve button when panel appears so Enter triggers it
+  useEffect(() => {
+    if (execution.status === 'pending_approval' && execution.generatedCommand && !isEditing) {
+      // Delay focus to avoid capturing Enter key that was used to send the message
+      // 200ms is enough for the key to fully release
+      const timeout = setTimeout(() => {
+        approveButtonRef.current?.focus();
+      }, 200);
+      return () => clearTimeout(timeout);
+    }
+  }, [execution.status, execution.generatedCommand, isEditing]);
 
   // Keyboard shortcuts: Enter = approve, Escape = reject
   // Must be before early return to satisfy React's rules of hooks
@@ -20,6 +33,16 @@ export function CommandApproval() {
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input field
+      const activeElement = document.activeElement;
+      const isTyping = activeElement instanceof HTMLInputElement ||
+                       activeElement instanceof HTMLTextAreaElement ||
+                       activeElement?.getAttribute('contenteditable') === 'true';
+
+      if (isTyping) {
+        return;
+      }
+
       // Get current state directly from store to avoid stale closures
       const state = useAppStore.getState();
       const { execution } = state;
@@ -126,6 +149,7 @@ export function CommandApproval() {
         ) : (
           <>
             <button
+              ref={approveButtonRef}
               onClick={handleApprove}
               className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2 px-4 rounded text-sm font-medium transition-colors"
             >
