@@ -1,9 +1,8 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import { CharacterCanvas } from './components/character';
 import { ChatPanel } from './components/chat';
 import { SettingsModal, TitleBar } from './components/ui';
 import { useAppStore } from './store';
-import { debugLog } from './lib/debug';
 
 // Check if we're in overlay mode (desktop pet mode)
 // Window interface types are declared in src/lib/platform.ts
@@ -21,7 +20,7 @@ const BASE_CANVAS_WIDTH = 240;      // Inner canvas width
 const BASE_CANVAS_HEIGHT = 600;     // Inner canvas height
 const BASE_CHAT_WIDTH = 640;        // Chat panel width
 const BASE_CHAT_HEIGHT = 1000;      // Chat panel height
-const CHAT_ANIMATION_DURATION = 300;  // ms (matches CSS transition)
+const CHAT_ANIMATION_DURATION = 300;  // ms for slide animation
 
 // Helper to send window move messages to the Rust backend via WebKit
 function sendMoveMessage(message: { action: string; offsetX?: number; offsetY?: number }) {
@@ -49,6 +48,8 @@ function OverlayMode() {
   const characterScale = useAppStore((state) => state.settings.characterScale) ?? 1.0;
   const chatScale = useAppStore((state) => state.settings.chatScale) ?? 1.0;
   const isScaleSliderDragging = useAppStore((state) => state.ui.isScaleSliderDragging);
+  const quadrant = useAppStore((state) => state.ui.quadrant);
+  const setQuadrant = useAppStore((state) => state.setQuadrant);
 
   // Scaled character dimensions
   const scaledCharacterWidth = Math.round(BASE_WIDTH_COLLAPSED * characterScale);
@@ -88,6 +89,27 @@ function OverlayMode() {
   const prevDraggingRef = useRef(isScaleSliderDragging);
   const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Track if chat container should be rendered (stays visible during close animation)
+  const [chatContainerVisible, setChatContainerVisible] = useState(chatPanelOpen);
+
+  // Opacity state for fade animation (triggers after container is visible)
+  const [chatOpacity, setChatOpacity] = useState(chatPanelOpen ? 1 : 0);
+
+  // Handle chat panel open/close with opacity fade
+  useEffect(() => {
+    if (chatPanelOpen) {
+      setChatContainerVisible(true);
+      // Fade in on next frame
+      const frameId = requestAnimationFrame(() => {
+        setChatOpacity(1);
+      });
+      return () => cancelAnimationFrame(frameId);
+    } else {
+      // Fade out immediately
+      setChatOpacity(0);
+    }
+  }, [chatPanelOpen]);
+
   // Handle "trayShow" event from Rust when user clicks Show in tray
   useEffect(() => {
     const handleTrayShow = () => {
@@ -98,6 +120,21 @@ function OverlayMode() {
     window.addEventListener('trayShow', handleTrayShow);
     return () => window.removeEventListener('trayShow', handleTrayShow);
   }, [setHiding]);
+
+  // Handle quadrant changes from Rust and request initial state
+  useEffect(() => {
+    const handleQuadrantChange = (e: Event) => {
+      const detail = (e as CustomEvent<{ isRightHalf: boolean; isBottomHalf: boolean }>).detail;
+      setQuadrant(detail.isRightHalf, detail.isBottomHalf);
+    };
+
+    window.addEventListener('quadrantChange', handleQuadrantChange);
+
+    // Request initial quadrant from Rust
+    window.webkit?.messageHandlers?.getQuadrant?.postMessage({});
+
+    return () => window.removeEventListener('quadrantChange', handleQuadrantChange);
+  }, [setQuadrant]);
 
   // Resize window based on chat panel state and scale
   // Only resize on mouse release to prevent feedback loop during slider drag
@@ -118,14 +155,17 @@ function OverlayMode() {
         sendResizeMessage(scaledExpandedWidth, scaledExpandedHeight);
       } else {
         sendResizeMessage(scaledCollapsedWidth, scaledCollapsedHeight);
+        // Hide container after resize (animation complete)
+        setChatContainerVisible(false);
       }
     };
 
     if (panelToggled) {
-      // Panel open/close: immediate for open, delayed for close (wait for animation)
       if (chatPanelOpen) {
+        // Opening: resize immediately, then animate slide in
         doResize();
       } else {
+        // Closing: animate slide out, then resize after animation
         resizeTimeoutRef.current = setTimeout(doResize, CHAT_ANIMATION_DURATION);
       }
     } else if (dragEnded) {
@@ -227,71 +267,75 @@ function OverlayMode() {
     }
   }, [setChatPanelOpen, triggerHide]);
 
+  // Focus textarea when chat panel opens
+  useEffect(() => {
+    if (chatPanelOpen) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        requestKeyboardFocus();
+        const textarea = document.querySelector('textarea');
+        if (textarea) {
+          (textarea as HTMLTextAreaElement).focus();
+        }
+      }, 50);
+    }
+  }, [chatPanelOpen]);
+
+  // Character hide animation direction based on which side window is on
+  const characterHideTransform = quadrant.isRightHalf ? 'translateX(100%)' : 'translateX(-100%)';
+
   return (
     <div
       className="w-screen h-screen relative overflow-hidden"
       style={{ background: 'transparent' }}
     >
-      {/* Content anchored to right edge - character always visible, chat expands left */}
+      {/* Chat container - fades in/out with opacity animation */}
       <div
-        className="absolute right-0 top-0 h-full flex flex-row"
-        style={{ width: scaledExpandedWidth }}
+        className="absolute overflow-hidden"
+        style={{
+          width: chatContainerVisible ? scaledChatWidth : 0,
+          height: chatContainerVisible ? scaledChatHeight : 0,
+          ...(quadrant.isRightHalf ? { right: scaledCollapsedWidth } : { left: scaledCollapsedWidth }),
+          ...(quadrant.isBottomHalf ? { bottom: 0 } : { top: 0 }),
+        }}
       >
-        {/* Chat panel area - fixed width on left, content slides in */}
-        <div className="h-full flex-shrink-0 overflow-hidden" style={{ width: scaledChatWidth }}>
-          <div
-            className="h-full bg-[#1a1a2e] flex flex-col transition-transform duration-300 ease-in-out"
-            style={{ width: scaledChatWidth, transform: chatPanelOpen ? 'translateX(0)' : 'translateX(-100%)' }}
-            onTransitionEnd={(e) => {
-              debugLog(`[FOCUS] transitionEnd - property: ${e.propertyName}, target===currentTarget: ${e.target === e.currentTarget}, chatPanelOpen: ${chatPanelOpen}`);
-              // Only handle transform transitions on this element when opening
-              if (e.propertyName === 'transform' && e.target === e.currentTarget && chatPanelOpen) {
-                debugLog('[FOCUS] Conditions met, scheduling focus');
-                // Small delay after transition to focus after whatever steals focus
-                setTimeout(() => {
-                  debugLog('[FOCUS] Timeout fired, calling requestKeyboardFocus');
-                  // Request keyboard focus from compositor first
-                  requestKeyboardFocus();
-
-                  const textarea = document.querySelector('textarea');
-                  debugLog(`[FOCUS] textarea found: ${!!textarea}`);
-                  if (textarea) {
-                    (textarea as HTMLTextAreaElement).focus();
-                    debugLog(`[FOCUS] focus() called, activeElement: ${document.activeElement?.tagName}`);
-                  }
-                }, 50);
-              }
-            }}
-          >
-            <ChatPanel onClose={() => setChatPanelOpen(false)} />
-          </div>
-        </div>
-
-        {/* Character canvas - draggable, click toggles panel, double-click hides */}
-        {/* Outer div is viewport (clips overflow), inner div is fixed canvas size */}
         <div
-          ref={dragElementRef}
-          className="h-full cursor-grab active:cursor-grabbing flex-shrink-0 transition-transform duration-700 ease-in overflow-hidden relative"
+          className="h-full bg-[#1a1a2e] flex flex-col transition-opacity duration-300 ease-out"
           style={{
-            width: scaledCollapsedWidth,
-            transform: isHiding ? 'translateX(100%)' : 'translateX(0)',
+            width: scaledChatWidth,
+            opacity: chatOpacity,
           }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
         >
-          {/* Fixed size canvas - positioned to center character in viewport */}
-          <div
-            className="absolute"
-            style={{
-              width: scaledCanvasWidth,
-              height: scaledCanvasHeight,
-              left: -((scaledCanvasWidth - scaledCollapsedWidth) / 2),
-              bottom: 0,
-            }}
-          >
-            <CharacterCanvas disableControls />
-          </div>
+          <ChatPanel onClose={() => setChatPanelOpen(false)} />
+        </div>
+      </div>
+
+      {/* Character viewport - positioned at quadrant corner */}
+      <div
+        ref={dragElementRef}
+        className={`absolute cursor-grab active:cursor-grabbing transition-transform duration-700 ease-in overflow-hidden ${quadrant.isBottomHalf ? "bottom-0" : "top-0"} ${quadrant.isRightHalf ? "right-0" : "left-0"}`}
+        style={{
+          width: scaledCollapsedWidth,
+          height: scaledCollapsedHeight,
+          transform: isHiding ? characterHideTransform : 'translateX(0)',
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
+        {/* Canvas - positioned with transform for offset */}
+        <div
+          className={`absolute bottom-0 ${quadrant.isRightHalf ? "right-0" : "left-0"}`}
+          style={{
+            width: scaledCanvasWidth,
+            height: scaledCanvasHeight,
+            transform: `translateX(${quadrant.isRightHalf
+              ? ((scaledCanvasWidth - scaledCollapsedWidth) / 2)
+              : -((scaledCanvasWidth - scaledCollapsedWidth) / 2)
+            }px)`,
+          }}
+        >
+          <CharacterCanvas disableControls />
         </div>
       </div>
 
