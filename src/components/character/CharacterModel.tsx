@@ -115,13 +115,14 @@ export function CharacterModel({ config }: CharacterModelProps) {
     // Set model position, scale, and rotation
     vrm.scene.position.set(...config.model.position);
     vrm.scene.scale.setScalar(config.model.scale);
+    const rotationY = config.model.rotation ? config.model.rotation[1] : Math.PI;
     if (config.model.rotation) {
       vrm.scene.rotation.set(...config.model.rotation);
-      originalRotationYRef.current = config.model.rotation[1];
     } else {
-      vrm.scene.rotation.y = Math.PI; // Rotate 180 degrees to face camera
-      originalRotationYRef.current = Math.PI;
+      vrm.scene.rotation.set(0, Math.PI, 0); // Reset all axes and rotate 180 degrees to face camera
     }
+    originalRotationYRef.current = rotationY;
+    targetRotationYRef.current = rotationY; // Also update target immediately
 
     // Make the model cast and receive shadows
     vrm.scene.traverse((child) => {
@@ -164,9 +165,12 @@ export function CharacterModel({ config }: CharacterModelProps) {
     setModelLoaded(true);
     setCharacterLoaded(true);
 
+    const modelPath = config.model.path;
     return () => {
       mixerRef.current?.stopAllAction();
       VRMUtils.deepDispose(vrm.scene); // Dispose resources
+      // Clear the useLoader cache to prevent stale rotation/state on next load
+      useLoader.clear(GLTFLoader, modelPath);
     };
   }, [gltf, idleAnimGltf, thinkingAnimGltf, runningAnimGltf, armStretchAnimGltf, standingPoseAnimGltf, config, setCharacterLoaded]);
 

@@ -29,6 +29,8 @@ function createCharacter(id: string, name: string, overrides?: Partial<Character
 }
 
 // All available characters
+// Note: jessica, sam, victoria VRMs are natively oriented facing +Z (camera), so they need rotation [0, 0, 0]
+// Other models (emily, grace, rose) are oriented facing -Z, so they use the default Math.PI rotation
 export const characters: Record<string, Character> = {
   emily: createCharacter('emily', 'Emily'),
   grace: createCharacter('grace', 'Grace'),

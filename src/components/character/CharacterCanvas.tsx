@@ -74,7 +74,7 @@ export function CharacterCanvas({ disableControls = false }: CharacterCanvasProp
               edgeStrength={100}
               width={1000}
             />
-            <CharacterModel config={character.config} />
+            <CharacterModel key={selectedCharacter} config={character.config} />
           </EffectComposer>
         </Suspense>
 

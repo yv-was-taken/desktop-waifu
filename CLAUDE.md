@@ -65,3 +65,13 @@ Create a folder in `src/characters/` with:
 1. Create provider class in `src/lib/llm/providers/` implementing `LLMProvider`
 2. Register in `src/lib/llm/index.ts`
 3. Add model options to settings store
+
+## Debugging
+
+**NEVER use `console.log()` for debugging.** Client-side console.log will NOT appear in the terminal running `bun dev` - it only shows in browser devtools which are not accessible in the overlay.
+
+**ALWAYS use `debugLog()` from `src/lib/debug.ts` instead:**
+1. Import: `import { debugLog } from '../../lib/debug';`
+2. Set `DEBUG_ENABLED = true` in `src/lib/debug.ts` to enable output
+3. Use: `debugLog('your message here');`
+4. Messages will appear in the terminal where `bun dev` is running
