@@ -25,7 +25,6 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   const addMessage = useAppStore((state) => state.addMessage);
   const setThinking = useAppStore((state) => state.setThinking);
   const setExpression = useAppStore((state) => state.setExpression);
-  const setTalking = useAppStore((state) => state.setTalking);
   const toggleSettings = useAppStore((state) => state.toggleSettings);
   const clearMessages = useAppStore((state) => state.clearMessages);
 
@@ -164,9 +163,8 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         temperature: 0.8,
       });
 
-      // Done thinking, now talking
+      // Done thinking
       setThinking(false);
-      setTalking(true);
 
       debugLog(`[LLM] Response received, length=${response.length}`);
       debugLog(`[LLM] Response preview: ${response.substring(0, 200)}`);
@@ -189,32 +187,19 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         addMessage({ role: 'assistant', content: response });
       }
 
-      // Calculate talking duration based on response length (roughly 50ms per character)
-      const talkDuration = Math.min(Math.max(response.length * 50, 2000), 8000);
-
-      // Stop talking after the calculated duration
-      setTimeout(() => {
-        setTalking(false);
-        setExpression('neutral');
-      }, talkDuration);
+      setExpression('neutral');
 
     } catch (error) {
       console.error('LLM Error:', error);
       setThinking(false);
-      setTalking(true);
 
       addMessage({
         role: 'assistant',
         content: `Ah, something went wrong! ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
       setExpression('sad');
-
-      setTimeout(() => {
-        setTalking(false);
-        setExpression('neutral');
-      }, 3000);
     }
-  }, [settings, messages, addMessage, setThinking, setExpression, setTalking, systemInfo, parseExecuteTag, setGeneratedCommand]);
+  }, [settings, messages, addMessage, setThinking, setExpression, systemInfo, parseExecuteTag, setGeneratedCommand]);
 
   return (
     <div className="w-full h-full flex flex-col bg-slate-900/90 border border-slate-600">
