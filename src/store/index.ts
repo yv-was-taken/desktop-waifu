@@ -301,8 +301,20 @@ export const useAppStore = create<AppState>()(
           detailLevel: state.settings.detailLevel,
           assistantSubject: state.settings.assistantSubject,
           customSubject: state.settings.customSubject,
+          showSettings: state.settings.showSettings,
+        },
+        ui: {
+          chatPanelOpen: state.ui.chatPanelOpen,
         },
       }),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<AppState>;
+        return {
+          ...currentState,
+          settings: { ...currentState.settings, ...persisted.settings },
+          ui: { ...currentState.ui, ...persisted.ui },
+        };
+      },
     }
   )
 );

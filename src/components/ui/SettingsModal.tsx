@@ -206,6 +206,10 @@ export function SettingsModal() {
               value={settings.characterScale}
               onPointerDown={() => setScaleSliderDragging(true)}
               onChange={(e) => updateSettings({ characterScale: parseFloat(e.target.value) })}
+              onPointerUp={() => {
+                setScaleSliderDragging(false);
+                window.location.reload();
+              }}
               className="w-full accent-teal-400"
             />
           </div>
