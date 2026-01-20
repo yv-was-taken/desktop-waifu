@@ -204,9 +204,19 @@ export function CharacterModel({ config }: CharacterModelProps) {
   useEffect(() => {
     if (animationState === 'running') {
       // Rotate to face the edge of the screen the character is running towards
-      // If on right half, run towards right edge (face right): turn +90° from Math.PI
-      // If on left half, run towards left edge (face left): turn -90° from Math.PI
-      targetRotationYRef.current = isRightHalf ? Math.PI * 1.5 : Math.PI / 2;
+      // Direction depends on the character's base rotation
+      const baseRotation = originalRotationYRef.current;
+      if (baseRotation === 0) {
+        // jessica, sam, victoria - base rotation 0 (facing camera from opposite direction)
+        // right half → run right → face right: +90° from 0
+        // left half → run left → face left: -90° from 0
+        targetRotationYRef.current = isRightHalf ? Math.PI / 2 : -Math.PI / 2;
+      } else {
+        // emily, grace, rose - base rotation Math.PI
+        // right half → run right → face right: +90° from Math.PI = 270°
+        // left half → run left → face left: -90° from Math.PI = 90°
+        targetRotationYRef.current = isRightHalf ? Math.PI * 1.5 : Math.PI / 2;
+      }
     } else {
       // Restore original rotation (facing camera)
       targetRotationYRef.current = originalRotationYRef.current;
