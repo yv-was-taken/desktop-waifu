@@ -2,7 +2,7 @@ mod ipc;
 mod tray;
 
 // Debug logging flag - set to true to enable debug output to terminal
-const DEBUG_LOGGING: bool = true;
+const DEBUG_LOGGING: bool = false;
 
 // Helper macro for conditional debug logging
 macro_rules! debug_log {

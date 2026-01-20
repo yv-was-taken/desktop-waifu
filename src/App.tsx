@@ -3,10 +3,22 @@ import { CharacterCanvas } from './components/character';
 import { ChatPanel } from './components/chat';
 import { SettingsModal, TitleBar } from './components/ui';
 import { useAppStore } from './store';
+import {
+  isOverlayMode,
+  setInputRegion,
+  clearInputRegion,
+} from './lib/platform';
 
-// Check if we're in overlay mode (desktop pet mode)
-// Window interface types are declared in src/lib/platform.ts
-const isOverlayMode = new URLSearchParams(window.location.search).get('overlay') === 'true';
+// Check if running in Tauri (non-Wayland) overlay mode
+// In this mode, we use Tauri's invoke API instead of WebKit message handlers
+const isTauriOverlay = !isOverlayMode && typeof window.__TAURI__ !== 'undefined';
+
+// Extend window type for Tauri
+declare global {
+  interface Window {
+    __TAURI__?: unknown;
+  }
+}
 
 // Request keyboard focus from compositor (for Wayland layer-shell)
 function requestKeyboardFocus() {
@@ -33,14 +45,24 @@ function sendWindowControlMessage(message: { action: 'hide' | 'show' }) {
 }
 
 // Helper to set input region for click-through control
-function setInputRegion(mode: 'character' | 'full', characterBounds?: { x: number; y: number; width: number; height: number }) {
-  if (mode === 'character' && characterBounds) {
-    window.webkit?.messageHandlers?.setInputRegion?.postMessage({
-      mode: 'character',
-      ...characterBounds,
-    });
-  } else {
-    window.webkit?.messageHandlers?.setInputRegion?.postMessage({ mode: 'full' });
+function updateInputRegion(mode: 'character' | 'full', characterBounds?: { x: number; y: number; width: number; height: number }) {
+  if (isOverlayMode) {
+    // Wayland overlay: use WebKit message handlers
+    if (mode === 'character' && characterBounds) {
+      window.webkit?.messageHandlers?.setInputRegion?.postMessage({
+        mode: 'character',
+        ...characterBounds,
+      });
+    } else {
+      window.webkit?.messageHandlers?.setInputRegion?.postMessage({ mode: 'full' });
+    }
+  } else if (isTauriOverlay) {
+    // Tauri overlay: use invoke API
+    if (mode === 'character' && characterBounds) {
+      setInputRegion(characterBounds.x, characterBounds.y, characterBounds.width, characterBounds.height);
+    } else {
+      clearInputRegion();
+    }
   }
 }
 
@@ -178,7 +200,7 @@ function OverlayMode() {
   useEffect(() => {
     if (showSettings) {
       // Settings modal is open: allow clicks everywhere
-      setInputRegion('full');
+      updateInputRegion('full');
     } else if (chatPanelOpen) {
       // Chat is open: set input region to character + chat area
       // Calculate chat bounds based on character position and quadrant
@@ -195,7 +217,7 @@ function OverlayMode() {
       const maxX = Math.max(characterPos.x + scaledCharacterWidth, chatX + scaledChatWidth);
       const maxY = Math.max(characterPos.y + scaledCharacterHeight, chatY + scaledChatHeight);
 
-      setInputRegion('character', {
+      updateInputRegion('character', {
         x: minX,
         y: minY,
         width: maxX - minX,
@@ -203,7 +225,7 @@ function OverlayMode() {
       });
     } else {
       // Chat is closed: only character area should receive input
-      setInputRegion('character', {
+      updateInputRegion('character', {
         x: characterPos.x,
         y: characterPos.y,
         width: scaledCharacterWidth,

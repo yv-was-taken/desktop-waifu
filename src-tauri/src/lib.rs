@@ -1,3 +1,5 @@
+mod overlay;
+
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
 use tauri::Emitter;
@@ -179,7 +181,16 @@ pub fn run() {
             greet,
             get_system_info,
             execute_command,
-            execute_command_stream
+            execute_command_stream,
+            overlay::set_click_through,
+            overlay::set_input_region,
+            overlay::clear_input_region,
+            overlay::set_overlay_mode,
+            overlay::move_window,
+            overlay::resize_window,
+            overlay::get_window_position,
+            overlay::get_screen_size,
+            overlay::check_wayland
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
