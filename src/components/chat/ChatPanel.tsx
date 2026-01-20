@@ -230,7 +230,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         <div className="flex gap-1 no-drag">
           <button
             onClick={clearMessages}
-            className="text-white hover:text-pink-400 transition-colors p-1.5 border-2 border-white hover:border-pink-400 transform hover:scale-110"
+            className="text-white hover:text-pink-400 transition-colors p-1.5 border-2 border-white hover:border-pink-400 transform hover:scale-110 cursor-grab active:cursor-grabbing"
             title="Clear chat"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -239,7 +239,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
           </button>
           <button
             onClick={toggleSettings}
-            className="text-white hover:text-pink-400 transition-colors p-1.5 border-2 border-white hover:border-pink-400 transform hover:scale-110"
+            className="text-white hover:text-pink-400 transition-colors p-1.5 border-2 border-white hover:border-pink-400 transform hover:scale-110 cursor-grab active:cursor-grabbing"
             title="Settings"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -249,7 +249,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
           {onClose && (
             <button
               onClick={onClose}
-              className="text-white transition-colors p-1.5 border-2 border-red-500 bg-red-500 hover:bg-red-600 hover:border-red-600 transform hover:scale-110"
+              className="text-white transition-colors p-1.5 border-2 border-red-500 bg-red-500 hover:bg-red-600 hover:border-red-600 transform hover:scale-110 cursor-grab active:cursor-grabbing"
               title="Close panel"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
