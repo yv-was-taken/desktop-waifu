@@ -354,9 +354,10 @@ function OverlayMode() {
           height: scaledCharacterHeight,
           left: characterPos.x,
           top: characterPos.y,
-          // Transform for hide animation
+          // Transform and opacity for hide animation
           transform: isHiding ? characterHideTransform : undefined,
-          transition: isHiding ? 'transform 700ms ease-in' : undefined,
+          opacity: isHiding ? 0 : 1,
+          transition: isHiding ? 'transform 700ms ease-in, opacity 700ms ease-in' : undefined,
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
