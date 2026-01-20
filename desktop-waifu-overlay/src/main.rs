@@ -1,4 +1,5 @@
 mod ipc;
+mod server;
 mod tray;
 
 // Debug logging flag - set to true to enable debug output to terminal
@@ -91,12 +92,60 @@ fn main() -> Result<()> {
 
     info!("Starting desktop-waifu-overlay");
 
+    // Determine the URL to load: try dev server first, fall back to static files
+    let webview_url = if server::is_dev_server_available() {
+        info!("Vite dev server detected on port 1420");
+        "http://localhost:1420?overlay=true".to_string()
+    } else {
+        // Production mode: find dist directory and start static server
+        let dist_path = server::find_dist_dir().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Could not find dist directory. Build the frontend first with: bun build"
+            )
+        })?;
+
+        info!("Production mode: serving static files from {:?}", dist_path);
+
+        // Start tokio runtime in a separate thread for the HTTP server
+        let (tx, rx) = std::sync::mpsc::channel();
+        let dist_path_clone = dist_path.clone();
+
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                match server::start_static_server(dist_path_clone).await {
+                    Ok(port) => {
+                        tx.send(Ok(port)).ok();
+                        // Keep the runtime alive
+                        std::future::pending::<()>().await;
+                    }
+                    Err(e) => {
+                        tx.send(Err(e)).ok();
+                    }
+                }
+            });
+        });
+
+        // Wait for server to start
+        let port = rx
+            .recv()
+            .map_err(|e| anyhow::anyhow!("Server thread died: {}", e))?
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        format!("http://localhost:{}?overlay=true", port)
+    };
+
+    info!("WebView will load from: {}", webview_url);
+
     // Create GTK application
     let app = Application::builder()
         .application_id(APP_ID)
         .build();
 
-    app.connect_activate(build_ui);
+    // Clone URL for the closure
+    let url_for_activate = webview_url.clone();
+    app.connect_activate(move |app| {
+        build_ui(app, &url_for_activate);
+    });
 
     // Run the application
     let exit_code = app.run();
@@ -108,7 +157,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn build_ui(app: &Application) {
+fn build_ui(app: &Application, webview_url: &str) {
     // Create the main window (start with character-only size, expands when chat opens)
     let window = ApplicationWindow::builder()
         .application(app)
@@ -235,10 +284,9 @@ fn build_ui(app: &Application) {
         });
     }
 
-    // Load from Vite dev server - add ?overlay=true to enable overlay mode
-    let dev_url = "http://localhost:1420?overlay=true";
-    webview.load_uri(dev_url);
-    info!("Loading WebView from: {}", dev_url);
+    // Load the webview URL (dev server or static file server)
+    webview.load_uri(webview_url);
+    info!("Loading WebView from: {}", webview_url);
 
     // When window loses focus (user clicks away), switch to OnDemand mode
     // so other apps can receive keyboard input.

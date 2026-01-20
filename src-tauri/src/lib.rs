@@ -1,3 +1,5 @@
+mod overlay;
+
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
 use tauri::Emitter;
@@ -173,14 +175,25 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![
-            greet,
-            get_system_info,
-            execute_command,
-            execute_command_stream
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    // Check if running on Wayland
+    if overlay::is_wayland() {
+        println!("[Tauri] Wayland detected, launching overlay binary...");
+
+        if !overlay::is_overlay_available() {
+            eprintln!("Error: Wayland overlay binary not found.");
+            eprintln!("Build with: cargo build --manifest-path desktop-waifu-overlay/Cargo.toml --release");
+            std::process::exit(1);
+        }
+
+        if let Err(e) = overlay::launch_overlay_and_exit() {
+            eprintln!("Error launching overlay: {}", e);
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    // Not on Wayland - show error and exit
+    eprintln!("Error: Desktop Waifu requires Wayland.");
+    eprintln!("Supported: Sway, Hyprland, GNOME (Wayland), KDE Plasma (Wayland)");
+    std::process::exit(1);
 }

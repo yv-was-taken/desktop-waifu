@@ -106,3 +106,34 @@ export async function getSystemInfo(): Promise<SystemInfo> {
     return invoke<SystemInfo>('get_system_info');
   }
 }
+
+/**
+ * Check if the current session is running on Wayland.
+ * In overlay mode, this always returns true (overlay only runs on Wayland).
+ */
+export async function checkWayland(): Promise<boolean> {
+  if (isOverlayMode) {
+    return true; // Already using Wayland overlay binary
+  }
+  return invoke<boolean>('check_wayland');
+}
+
+/**
+ * Set the input region for click-through control (overlay mode only).
+ * This defines the area where the overlay captures mouse input.
+ */
+export async function setInputRegion(x: number, y: number, width: number, height: number): Promise<void> {
+  if (isOverlayMode) {
+    window.webkit?.messageHandlers?.setInputRegion?.postMessage({ mode: 'character', x, y, width, height });
+  }
+}
+
+/**
+ * Clear the input region to capture all input (overlay mode only).
+ * This makes the entire overlay window interactive.
+ */
+export async function clearInputRegion(): Promise<void> {
+  if (isOverlayMode) {
+    window.webkit?.messageHandlers?.setInputRegion?.postMessage({ mode: 'full' });
+  }
+}

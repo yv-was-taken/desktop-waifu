@@ -28,3 +28,7 @@ thiserror = "2"
 
 # System tray (StatusNotifierItem protocol)
 ksni = "0.2"
+
+# Static file server for production mode
+axum = "0.8"
+tower-http = { version = "0.6", features = ["fs"] }
