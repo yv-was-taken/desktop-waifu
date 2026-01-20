@@ -357,6 +357,7 @@ function OverlayMode() {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onContextMenu={(e) => e.preventDefault()}
       >
         {/* Canvas - centered within character viewport */}
         <div
