@@ -9,7 +9,7 @@ A desktop companion app featuring animated 3D VRM characters with AI-powered con
 
 ## Features
 
-- **15 Selectable 3D Characters** - Fully animated VRM models with idle, talking, and expression animations
+- **6 Selectable 3D Characters** - Fully animated VRM models with idle, talking, and expression animations
 - **Multi-Provider LLM Support** - OpenAI, Anthropic Claude, and Google Gemini integration
 - **7 Customizable Personalities** - From friendly companion to professional tutor
 - **Dual Display Modes**:
@@ -127,9 +127,9 @@ API keys are stored locally in the application's data directory:
 
 ### Characters
 
-15 characters are available, each with the same animation set but unique appearances:
+6 characters are available, each with the same animation set but unique appearances:
 
-Alexandra, Alice, Amanda, Emily, Grace, Jasmine, Jessica, Julia, Maria, Melissa, Rose, Sam, Sandra, Sofia, Victoria
+Emily, Grace, Jessica, Rose, Sam, Victoria
 
 ### Personalities
 
