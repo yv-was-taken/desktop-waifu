@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useFrame, useLoader } from '@react-three/fiber';
 import { GLTFLoader, type GLTFParser } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, VRM } from '@pixiv/three-vrm';
@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import type { CharacterConfig } from '../../types';
 import { useAppStore } from '../../store';
 
-type AnimationState = 'idle' | 'listening' | 'thinking' | 'talking' | 'running';
+type AnimationState = 'idle' | 'listening' | 'thinking' | 'running';
 
 interface CharacterModelProps {
   config: CharacterConfig;
@@ -22,16 +22,15 @@ export function CharacterModel({ config }: CharacterModelProps) {
   const setCharacterLoaded = useAppStore((state) => state.setCharacterLoaded);
   const isUserTyping = useAppStore((state) => state.chat.isUserTyping);
   const isThinking = useAppStore((state) => state.chat.isThinking);
-  const isTalking = useAppStore((state) => state.character.isTalking);
   const isHiding = useAppStore((state) => state.character.isHiding);
+  const isRightHalf = useAppStore((state) => state.ui.quadrant.isRightHalf);
 
   const animationState: AnimationState = useMemo(() => {
     if (isHiding) return 'running';
-    if (isTalking) return 'talking';
     if (isThinking) return 'thinking';
     if (isUserTyping) return 'listening';
     return 'idle';
-  }, [isHiding, isTalking, isThinking, isUserTyping]);
+  }, [isHiding, isThinking, isUserTyping]);
 
   // Load VRM model
   const gltf = useLoader(GLTFLoader, config.model.path, (loader) => {
@@ -45,7 +44,13 @@ export function CharacterModel({ config }: CharacterModelProps) {
   const thinkingAnimGltf = useLoader(GLTFLoader, '/animations/thinking.vrma', (loader) => {
     loader.register((parser: GLTFParser) => new VRMAnimationLoaderPlugin(parser));
   });
-  const talkingAnimGltf = useLoader(GLTFLoader, '/animations/talking.vrma', (loader) => {
+  const runningAnimGltf = useLoader(GLTFLoader, '/animations/Running.vrma', (loader) => {
+    loader.register((parser: GLTFParser) => new VRMAnimationLoaderPlugin(parser));
+  });
+  const armStretchAnimGltf = useLoader(GLTFLoader, '/animations/Arm Stretching.vrma', (loader) => {
+    loader.register((parser: GLTFParser) => new VRMAnimationLoaderPlugin(parser));
+  });
+  const standingPoseAnimGltf = useLoader(GLTFLoader, '/animations/Female Standing Pose.vrma', (loader) => {
     loader.register((parser: GLTFParser) => new VRMAnimationLoaderPlugin(parser));
   });
 
@@ -53,8 +58,54 @@ export function CharacterModel({ config }: CharacterModelProps) {
   const actionsRef = useRef<{ [key: string]: THREE.AnimationAction }>({});
   const activeActionRef = useRef<THREE.AnimationAction | null>(null);
 
+  // Idle cycling
+  const idleVariants = useMemo(() => ['idle'], []);
+  const currentIdleRef = useRef('idle');
+  const [idleTrigger, setIdleTrigger] = useState(0);
+
+  // Store original rotation for restoring after running animation
+  const originalRotationYRef = useRef<number>(Math.PI);
+  // Target rotation for smooth turning
+  const targetRotationYRef = useRef<number>(Math.PI);
+
+  // Helper function to transition to a new animation
+  const transitionToAnimation = useCallback((animName: string) => {
+    if (!mixerRef.current || !actionsRef.current[animName]) return;
+
+    const newAction = actionsRef.current[animName];
+    const oldAction = activeActionRef.current;
+
+    if (newAction !== oldAction) {
+      if (oldAction) {
+        oldAction.fadeOut(0.3);
+      }
+      newAction.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(0.3).play();
+      activeActionRef.current = newAction;
+    }
+  }, []);
+
+  // Idle cycling timer
   useEffect(() => {
-    if (!gltf || !groupRef.current || !idleAnimGltf || !thinkingAnimGltf || !talkingAnimGltf) return;
+    if (!modelLoaded || animationState !== 'idle') return;
+
+    const scheduleNextIdleChange = () => {
+      // Random interval between 10-20 seconds
+      const interval = 10000 + Math.random() * 10000;
+      return setTimeout(() => {
+        // Pick a random idle variant different from the current one
+        const availableVariants = idleVariants.filter(v => v !== currentIdleRef.current);
+        const newVariant = availableVariants[Math.floor(Math.random() * availableVariants.length)];
+        currentIdleRef.current = newVariant;
+        setIdleTrigger(t => t + 1);
+      }, interval);
+    };
+
+    const timeoutId = scheduleNextIdleChange();
+    return () => clearTimeout(timeoutId);
+  }, [modelLoaded, animationState, idleVariants, idleTrigger]);
+
+  useEffect(() => {
+    if (!gltf || !groupRef.current || !idleAnimGltf || !thinkingAnimGltf || !runningAnimGltf || !armStretchAnimGltf || !standingPoseAnimGltf) return;
 
     // --- VRM Setup ---
     VRMUtils.removeUnnecessaryJoints(gltf.scene); // Clean up bones
@@ -66,8 +117,10 @@ export function CharacterModel({ config }: CharacterModelProps) {
     vrm.scene.scale.setScalar(config.model.scale);
     if (config.model.rotation) {
       vrm.scene.rotation.set(...config.model.rotation);
+      originalRotationYRef.current = config.model.rotation[1];
     } else {
       vrm.scene.rotation.y = Math.PI; // Rotate 180 degrees to face camera
+      originalRotationYRef.current = Math.PI;
     }
 
     // Make the model cast and receive shadows
@@ -88,8 +141,10 @@ export function CharacterModel({ config }: CharacterModelProps) {
     // Load all VRMA animations
     const animationGltfs = {
       idle: idleAnimGltf,
+      idle_stretch: armStretchAnimGltf,
+      idle_pose: standingPoseAnimGltf,
       thinking: thinkingAnimGltf,
-      talking: talkingAnimGltf,
+      running: runningAnimGltf,
     };
 
     for (const [name, animGltf] of Object.entries(animationGltfs)) {
@@ -113,34 +168,46 @@ export function CharacterModel({ config }: CharacterModelProps) {
       mixerRef.current?.stopAllAction();
       VRMUtils.deepDispose(vrm.scene); // Dispose resources
     };
-  }, [gltf, idleAnimGltf, thinkingAnimGltf, talkingAnimGltf, config, setCharacterLoaded]);
+  }, [gltf, idleAnimGltf, thinkingAnimGltf, runningAnimGltf, armStretchAnimGltf, standingPoseAnimGltf, config, setCharacterLoaded]);
 
   // Handle animation state changes
   useEffect(() => {
     if (!modelLoaded || !mixerRef.current) return;
 
     // Map animation state to animation name
-    // 'listening' and 'running' fall back to idle if no specific animation exists
-    const animName = animationState === 'listening' ? 'idle'
-      : animationState === 'running' ? (actionsRef.current['running'] ? 'running' : 'idle')
-      : animationState;
+    let animName: string;
+    if (animationState === 'idle') {
+      // Use the current idle variant for cycling
+      animName = currentIdleRef.current;
+    } else if (animationState === 'listening') {
+      // Listening uses the current idle animation
+      animName = currentIdleRef.current;
+    } else {
+      // 'thinking' or 'running' use their specific animations
+      animName = animationState;
+    }
 
+    // Fallback to 'idle' if animation not found
     if (!actionsRef.current[animName]) {
-      // Fallback to idle if specific animation not found
-      if (!actionsRef.current['idle']) return;
+      animName = 'idle';
+      if (!actionsRef.current[animName]) return;
     }
 
-    const newAction = actionsRef.current[animName] || actionsRef.current['idle'];
-    const oldAction = activeActionRef.current;
+    transitionToAnimation(animName);
+  }, [animationState, modelLoaded, idleTrigger, transitionToAnimation]);
 
-    if (newAction !== oldAction) {
-      if (oldAction) {
-        oldAction.fadeOut(0.3);
-      }
-      newAction.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(0.3).play();
-      activeActionRef.current = newAction;
+  // Handle model rotation target when running
+  useEffect(() => {
+    if (animationState === 'running') {
+      // Rotate to face the edge of the screen the character is running towards
+      // If on right half, run towards right edge (face right): turn +90° from Math.PI
+      // If on left half, run towards left edge (face left): turn -90° from Math.PI
+      targetRotationYRef.current = isRightHalf ? Math.PI * 1.5 : Math.PI / 2;
+    } else {
+      // Restore original rotation (facing camera)
+      targetRotationYRef.current = originalRotationYRef.current;
     }
-  }, [animationState, modelLoaded]);
+  }, [animationState, isRightHalf]);
 
   useFrame((_, delta) => {
     if (mixerRef.current) {
@@ -148,9 +215,21 @@ export function CharacterModel({ config }: CharacterModelProps) {
     }
     if (vrmRef.current) {
       vrmRef.current.update(delta); // Update VRM (expressions, look-at, etc.)
+
+      // Smoothly interpolate rotation towards target
+      const currentRotation = vrmRef.current.scene.rotation.y;
+      const targetRotation = targetRotationYRef.current;
+      if (Math.abs(currentRotation - targetRotation) > 0.01) {
+        // Lerp speed: ~5 radians per second for smooth turning
+        const lerpFactor = Math.min(1, delta * 5);
+        vrmRef.current.scene.rotation.y = THREE.MathUtils.lerp(
+          currentRotation,
+          targetRotation,
+          lerpFactor
+        );
+      }
     }
   });
 
   return <group ref={groupRef} />;
 }
-
