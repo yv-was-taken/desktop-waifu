@@ -151,6 +151,7 @@ name = "desktop-waifu-overlay"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cairo-rs",
  "gtk4",
  "gtk4-layer-shell",
  "ksni",

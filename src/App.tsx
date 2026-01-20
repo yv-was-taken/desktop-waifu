@@ -37,6 +37,18 @@ function sendResizeMessage(width: number, height: number) {
   window.webkit?.messageHandlers?.resizeWindow?.postMessage({ action: 'resize', width, height });
 }
 
+// Helper to set input region for click-through control
+function setInputRegion(mode: 'character' | 'full', characterBounds?: { x: number; y: number; width: number; height: number }) {
+  if (mode === 'character' && characterBounds) {
+    window.webkit?.messageHandlers?.setInputRegion?.postMessage({
+      mode: 'character',
+      ...characterBounds,
+    });
+  } else {
+    window.webkit?.messageHandlers?.setInputRegion?.postMessage({ mode: 'full' });
+  }
+}
+
 // Double-click timing threshold in milliseconds
 const DOUBLE_CLICK_THRESHOLD = 300;
 
@@ -136,6 +148,12 @@ function OverlayMode() {
     return () => window.removeEventListener('quadrantChange', handleQuadrantChange);
   }, [setQuadrant]);
 
+  // TEST: Resize to expanded dimensions on initial mount
+  useEffect(() => {
+    sendResizeMessage(scaledExpandedWidth, scaledExpandedHeight);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Resize window based on chat panel state and scale
   // Only resize on mouse release to prevent feedback loop during slider drag
   useEffect(() => {
@@ -151,10 +169,9 @@ function OverlayMode() {
     }
 
     const doResize = () => {
-      if (chatPanelOpen) {
-        sendResizeMessage(scaledExpandedWidth, scaledExpandedHeight);
-      } else {
-        sendResizeMessage(scaledCollapsedWidth, scaledCollapsedHeight);
+      // TEST: Always use expanded dimensions
+      sendResizeMessage(scaledExpandedWidth, scaledExpandedHeight);
+      if (!chatPanelOpen) {
         // Hide container after resize (animation complete)
         setChatContainerVisible(false);
       }
@@ -180,6 +197,25 @@ function OverlayMode() {
       }
     };
   }, [chatPanelOpen, scaledCollapsedWidth, scaledCollapsedHeight, scaledExpandedWidth, scaledExpandedHeight, isScaleSliderDragging]);
+
+  // Update input region for click-through when chat opens/closes
+  useEffect(() => {
+    if (chatPanelOpen) {
+      // Chat is open: full window should receive input
+      setInputRegion('full');
+    } else {
+      // Chat is closed: only character area should receive input
+      // Calculate character position based on quadrant
+      const x = quadrant.isRightHalf ? scaledExpandedWidth - scaledCollapsedWidth : 0;
+      const y = quadrant.isBottomHalf ? scaledExpandedHeight - scaledCollapsedHeight : 0;
+      setInputRegion('character', {
+        x,
+        y,
+        width: scaledCollapsedWidth,
+        height: scaledCollapsedHeight,
+      });
+    }
+  }, [chatPanelOpen, quadrant.isRightHalf, quadrant.isBottomHalf, scaledExpandedWidth, scaledExpandedHeight, scaledCollapsedWidth, scaledCollapsedHeight]);
 
   // Trigger hide sequence: set hiding state, wait for animation, then tell Rust to hide
   const triggerHide = useCallback(() => {

@@ -25,6 +25,8 @@ declare global {
         getSystemInfo?: { postMessage: (msg: { callbackId: string }) => void };
         // Quadrant detection handler (App.tsx)
         getQuadrant?: { postMessage: (msg: object) => void };
+        // Input region handler for click-through control (App.tsx)
+        setInputRegion?: { postMessage: (msg: { mode: 'character' | 'full'; x?: number; y?: number; width?: number; height?: number }) => void };
         // Debug logging handler (debug.ts)
         debug?: { postMessage: (msg: { message: string }) => void };
       };

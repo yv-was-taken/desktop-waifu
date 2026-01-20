@@ -14,6 +14,7 @@ macro_rules! debug_log {
 }
 
 use anyhow::Result;
+use cairo::{RectangleInt, Region};
 use gtk4::{gio, glib};
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow};
@@ -427,6 +428,9 @@ fn create_webview_with_handlers(
     // Register the "getQuadrant" message handler for initial quadrant state
     content_manager.register_script_message_handler("getQuadrant", None);
 
+    // Register the "setInputRegion" message handler for click-through control
+    content_manager.register_script_message_handler("setInputRegion", None);
+
     // Clone window for windowControl handler
     let window_for_control = window.clone();
 
@@ -810,6 +814,41 @@ fn create_webview_with_handlers(
 
             // Send to frontend
             send_quadrant_to_frontend(&webview_for_quadrant, &current_quadrant);
+        }
+    });
+
+    // Set up setInputRegion handler for click-through control
+    let window_for_input = window.clone();
+    content_manager.connect_script_message_received(Some("setInputRegion"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let mode = parsed["mode"].as_str().unwrap_or("full");
+
+                if let Some(surface) = window_for_input.surface() {
+                    match mode {
+                        "character" => {
+                            // Set input region to only the character area
+                            let x = parsed["x"].as_i64().unwrap_or(0) as i32;
+                            let y = parsed["y"].as_i64().unwrap_or(0) as i32;
+                            let width = parsed["width"].as_i64().unwrap_or(160) as i32;
+                            let height = parsed["height"].as_i64().unwrap_or(380) as i32;
+
+                            let region = Region::create_rectangle(&RectangleInt::new(x, y, width, height));
+                            surface.set_input_region(&region);
+                            debug_log!("[INPUT_REGION] Set to character area: x={}, y={}, w={}, h={}", x, y, width, height);
+                        }
+                        "full" | _ => {
+                            // Clear input region - accept input on entire window
+                            // Create a region covering the full window
+                            let width = window_for_input.width();
+                            let height = window_for_input.height();
+                            let region = Region::create_rectangle(&RectangleInt::new(0, 0, width, height));
+                            surface.set_input_region(&region);
+                            debug_log!("[INPUT_REGION] Set to full window: w={}, h={}", width, height);
+                        }
+                    }
+                }
+            }
         }
     });
 

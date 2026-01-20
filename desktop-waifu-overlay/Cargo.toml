@@ -10,6 +10,7 @@ license = "MIT"
 gtk4 = "0.10"
 gtk4-layer-shell = "0.7"
 webkit6 = "0.5"
+cairo-rs = { version = "0.21", features = ["v1_16"] }
 
 # IPC
 tokio = { version = "1", features = ["net", "rt-multi-thread", "sync", "macros", "process"] }
