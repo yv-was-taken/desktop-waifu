@@ -23,18 +23,13 @@ const BASE_CHAT_HEIGHT = 1000;      // Chat panel height
 const CHAT_ANIMATION_DURATION = 300;  // ms for slide animation
 
 // Helper to send window move messages to the Rust backend via WebKit
-function sendMoveMessage(message: { action: string; offsetX?: number; offsetY?: number }) {
+function sendMoveMessage(message: { action: string; offsetX?: number; offsetY?: number; characterWidth?: number; characterHeight?: number }) {
   window.webkit?.messageHandlers?.moveWindow?.postMessage(message);
 }
 
 // Helper to send window control messages (hide/show) to Rust backend
 function sendWindowControlMessage(message: { action: 'hide' | 'show' }) {
   window.webkit?.messageHandlers?.windowControl?.postMessage(message);
-}
-
-// Helper to send window resize messages to Rust backend
-function sendResizeMessage(width: number, height: number) {
-  window.webkit?.messageHandlers?.resizeWindow?.postMessage({ action: 'resize', width, height });
 }
 
 // Helper to set input region for click-through control
@@ -59,9 +54,11 @@ function OverlayMode() {
   const setHiding = useAppStore((state) => state.setHiding);
   const characterScale = useAppStore((state) => state.settings.characterScale) ?? 1.0;
   const chatScale = useAppStore((state) => state.settings.chatScale) ?? 1.0;
-  const isScaleSliderDragging = useAppStore((state) => state.ui.isScaleSliderDragging);
   const quadrant = useAppStore((state) => state.ui.quadrant);
   const setQuadrant = useAppStore((state) => state.setQuadrant);
+
+  // Character position (absolute screen coordinates from Rust)
+  const [characterPos, setCharacterPos] = useState({ x: 0, y: 0 });
 
   // Scaled character dimensions
   const scaledCharacterWidth = Math.round(BASE_WIDTH_COLLAPSED * characterScale);
@@ -72,12 +69,6 @@ function OverlayMode() {
   // Scaled chat dimensions
   const scaledChatWidth = Math.round(BASE_CHAT_WIDTH * chatScale);
   const scaledChatHeight = Math.round(BASE_CHAT_HEIGHT * chatScale);
-
-  // Window dimensions
-  const scaledCollapsedWidth = scaledCharacterWidth;
-  const scaledCollapsedHeight = scaledCharacterHeight;
-  const scaledExpandedWidth = scaledChatWidth + scaledCharacterWidth;
-  const scaledExpandedHeight = Math.max(scaledChatHeight, scaledCharacterHeight);
 
   // Drag state - track start position, not incremental deltas
   const isDragging = useRef(false);
@@ -95,11 +86,6 @@ function OverlayMode() {
 
   // Store ref to the drag element for pointer capture
   const dragElementRef = useRef<HTMLDivElement>(null);
-
-  // Track previous state for detecting changes
-  const prevChatPanelOpenRef = useRef(chatPanelOpen);
-  const prevDraggingRef = useRef(isScaleSliderDragging);
-  const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Track if chat container should be rendered (stays visible during close animation)
   const [chatContainerVisible, setChatContainerVisible] = useState(chatPanelOpen);
@@ -119,6 +105,9 @@ function OverlayMode() {
     } else {
       // Fade out immediately
       setChatOpacity(0);
+      // Hide container after animation
+      const timeout = setTimeout(() => setChatContainerVisible(false), CHAT_ANIMATION_DURATION);
+      return () => clearTimeout(timeout);
     }
   }, [chatPanelOpen]);
 
@@ -133,89 +122,91 @@ function OverlayMode() {
     return () => window.removeEventListener('trayShow', handleTrayShow);
   }, [setHiding]);
 
-  // Handle quadrant changes from Rust and request initial state
+  // Handle initial state from Rust (position + quadrant + screen dimensions)
+  useEffect(() => {
+    const handleInitialState = (e: Event) => {
+      const detail = (e as CustomEvent<{
+        x: number;
+        y: number;
+        isRightHalf: boolean;
+        isBottomHalf: boolean;
+        screenWidth: number;
+        screenHeight: number;
+      }>).detail;
+
+      setCharacterPos({ x: detail.x, y: detail.y });
+      setQuadrant(detail.isRightHalf, detail.isBottomHalf);
+    };
+
+    window.addEventListener('initialState', handleInitialState);
+    return () => window.removeEventListener('initialState', handleInitialState);
+  }, [setQuadrant]);
+
+  // Handle character position updates during drag
+  useEffect(() => {
+    const handleCharacterMove = (e: Event) => {
+      const detail = (e as CustomEvent<{ x: number; y: number }>).detail;
+      setCharacterPos({ x: detail.x, y: detail.y });
+    };
+
+    window.addEventListener('characterMove', handleCharacterMove);
+    return () => window.removeEventListener('characterMove', handleCharacterMove);
+  }, []);
+
+  // Handle quadrant changes from Rust (sent at end of drag)
   useEffect(() => {
     const handleQuadrantChange = (e: Event) => {
-      const detail = (e as CustomEvent<{ isRightHalf: boolean; isBottomHalf: boolean }>).detail;
+      const detail = (e as CustomEvent<{
+        isRightHalf: boolean;
+        isBottomHalf: boolean;
+      }>).detail;
+
       setQuadrant(detail.isRightHalf, detail.isBottomHalf);
     };
 
     window.addEventListener('quadrantChange', handleQuadrantChange);
-
-    // Request initial quadrant from Rust
-    window.webkit?.messageHandlers?.getQuadrant?.postMessage({});
-
     return () => window.removeEventListener('quadrantChange', handleQuadrantChange);
   }, [setQuadrant]);
 
-  // TEST: Resize to expanded dimensions on initial mount
+  // Request initial state from Rust - only on mount
   useEffect(() => {
-    sendResizeMessage(scaledExpandedWidth, scaledExpandedHeight);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    window.webkit?.messageHandlers?.getQuadrant?.postMessage({});
   }, []);
 
-  // Resize window based on chat panel state and scale
-  // Only resize on mouse release to prevent feedback loop during slider drag
-  useEffect(() => {
-    const panelToggled = prevChatPanelOpenRef.current !== chatPanelOpen;
-    const dragEnded = prevDraggingRef.current && !isScaleSliderDragging;
-    prevChatPanelOpenRef.current = chatPanelOpen;
-    prevDraggingRef.current = isScaleSliderDragging;
-
-    // Clear any pending resize
-    if (resizeTimeoutRef.current) {
-      clearTimeout(resizeTimeoutRef.current);
-      resizeTimeoutRef.current = null;
-    }
-
-    const doResize = () => {
-      // TEST: Always use expanded dimensions
-      sendResizeMessage(scaledExpandedWidth, scaledExpandedHeight);
-      if (!chatPanelOpen) {
-        // Hide container after resize (animation complete)
-        setChatContainerVisible(false);
-      }
-    };
-
-    if (panelToggled) {
-      if (chatPanelOpen) {
-        // Opening: resize immediately, then animate slide in
-        doResize();
-      } else {
-        // Closing: animate slide out, then resize after animation
-        resizeTimeoutRef.current = setTimeout(doResize, CHAT_ANIMATION_DURATION);
-      }
-    } else if (dragEnded) {
-      // Slider drag ended: resize now with final scale values
-      doResize();
-    }
-    // If scale changed while dragging, do nothing - wait for drag to end
-
-    return () => {
-      if (resizeTimeoutRef.current) {
-        clearTimeout(resizeTimeoutRef.current);
-      }
-    };
-  }, [chatPanelOpen, scaledCollapsedWidth, scaledCollapsedHeight, scaledExpandedWidth, scaledExpandedHeight, isScaleSliderDragging]);
-
-  // Update input region for click-through when chat opens/closes
+  // Update input region for click-through when chat opens/closes or character moves
   useEffect(() => {
     if (chatPanelOpen) {
-      // Chat is open: full window should receive input
-      setInputRegion('full');
+      // Chat is open: set input region to character + chat area
+      // Calculate chat bounds based on character position and quadrant
+      const chatX = quadrant.isRightHalf
+        ? characterPos.x - scaledChatWidth  // Chat to the left
+        : characterPos.x + scaledCharacterWidth;  // Chat to the right
+      const chatY = quadrant.isBottomHalf
+        ? characterPos.y + scaledCharacterHeight - scaledChatHeight  // Chat aligned to bottom
+        : characterPos.y;  // Chat aligned to top
+
+      // Combined bounds (character + chat)
+      const minX = Math.min(characterPos.x, chatX);
+      const minY = Math.min(characterPos.y, chatY);
+      const maxX = Math.max(characterPos.x + scaledCharacterWidth, chatX + scaledChatWidth);
+      const maxY = Math.max(characterPos.y + scaledCharacterHeight, chatY + scaledChatHeight);
+
+      setInputRegion('character', {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+      });
     } else {
       // Chat is closed: only character area should receive input
-      // Calculate character position based on quadrant
-      const x = quadrant.isRightHalf ? scaledExpandedWidth - scaledCollapsedWidth : 0;
-      const y = quadrant.isBottomHalf ? scaledExpandedHeight - scaledCollapsedHeight : 0;
       setInputRegion('character', {
-        x,
-        y,
-        width: scaledCollapsedWidth,
-        height: scaledCollapsedHeight,
+        x: characterPos.x,
+        y: characterPos.y,
+        width: scaledCharacterWidth,
+        height: scaledCharacterHeight,
       });
     }
-  }, [chatPanelOpen, quadrant.isRightHalf, quadrant.isBottomHalf, scaledExpandedWidth, scaledExpandedHeight, scaledCollapsedWidth, scaledCollapsedHeight]);
+  }, [chatPanelOpen, characterPos, scaledCharacterWidth, scaledCharacterHeight, scaledChatWidth, scaledChatHeight, quadrant]);
 
   // Trigger hide sequence: set hiding state, wait for animation, then tell Rust to hide
   const triggerHide = useCallback(() => {
@@ -317,58 +308,64 @@ function OverlayMode() {
     }
   }, [chatPanelOpen]);
 
-  // Character hide animation direction based on which side window is on
+  // Character hide animation direction based on which side of screen
   const characterHideTransform = quadrant.isRightHalf ? 'translateX(100%)' : 'translateX(-100%)';
+
+  // Calculate chat position relative to character's screen position
+  // Chat goes to the opposite side of the screen from the character
+  const chatLeft = quadrant.isRightHalf
+    ? characterPos.x - scaledChatWidth  // Chat to the left of character
+    : characterPos.x + scaledCharacterWidth;  // Chat to the right of character
+  const chatTop = quadrant.isBottomHalf
+    ? characterPos.y + scaledCharacterHeight - scaledChatHeight  // Align chat bottom to character bottom
+    : characterPos.y;  // Align chat top to character top
 
   return (
     <div
       className="w-screen h-screen relative overflow-hidden"
       style={{ background: 'transparent' }}
     >
-      {/* Chat container - fades in/out with opacity animation */}
-      <div
-        className="absolute overflow-hidden"
-        style={{
-          width: chatContainerVisible ? scaledChatWidth : 0,
-          height: chatContainerVisible ? scaledChatHeight : 0,
-          ...(quadrant.isRightHalf ? { right: scaledCollapsedWidth } : { left: scaledCollapsedWidth }),
-          ...(quadrant.isBottomHalf ? { bottom: 0 } : { top: 0 }),
-        }}
-      >
+      {/* Chat container - positioned relative to character's screen position */}
+      {chatContainerVisible && (
         <div
-          className="h-full bg-[#1a1a2e] flex flex-col transition-opacity duration-300 ease-out"
+          className="absolute overflow-hidden bg-[#1a1a2e] transition-opacity duration-300 ease-out"
           style={{
             width: scaledChatWidth,
+            height: scaledChatHeight,
+            left: chatLeft,
+            top: chatTop,
             opacity: chatOpacity,
           }}
         >
           <ChatPanel onClose={() => setChatPanelOpen(false)} />
         </div>
-      </div>
+      )}
 
-      {/* Character viewport - positioned at quadrant corner */}
+      {/* Character viewport - positioned via absolute screen coordinates */}
       <div
         ref={dragElementRef}
-        className={`absolute cursor-grab active:cursor-grabbing transition-transform duration-700 ease-in overflow-hidden ${quadrant.isBottomHalf ? "bottom-0" : "top-0"} ${quadrant.isRightHalf ? "right-0" : "left-0"}`}
+        className="absolute cursor-grab active:cursor-grabbing overflow-hidden"
         style={{
-          width: scaledCollapsedWidth,
-          height: scaledCollapsedHeight,
-          transform: isHiding ? characterHideTransform : 'translateX(0)',
+          width: scaledCharacterWidth,
+          height: scaledCharacterHeight,
+          left: characterPos.x,
+          top: characterPos.y,
+          // Transform for hide animation
+          transform: isHiding ? characterHideTransform : undefined,
+          transition: isHiding ? 'transform 700ms ease-in' : undefined,
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       >
-        {/* Canvas - positioned with transform for offset */}
+        {/* Canvas - centered within character viewport */}
         <div
-          className={`absolute bottom-0 ${quadrant.isRightHalf ? "right-0" : "left-0"}`}
+          className="absolute"
           style={{
             width: scaledCanvasWidth,
             height: scaledCanvasHeight,
-            transform: `translateX(${quadrant.isRightHalf
-              ? ((scaledCanvasWidth - scaledCollapsedWidth) / 2)
-              : -((scaledCanvasWidth - scaledCollapsedWidth) / 2)
-            }px)`,
+            left: (scaledCharacterWidth - scaledCanvasWidth) / 2,
+            bottom: 0,
           }}
         >
           <CharacterCanvas disableControls />

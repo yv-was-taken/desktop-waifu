@@ -16,7 +16,7 @@ declare global {
     webkit?: {
       messageHandlers?: {
         // Window control handlers (App.tsx)
-        moveWindow?: { postMessage: (msg: { action: string; offsetX?: number; offsetY?: number }) => void };
+        moveWindow?: { postMessage: (msg: { action: string; offsetX?: number; offsetY?: number; characterWidth?: number; characterHeight?: number }) => void };
         windowControl?: { postMessage: (msg: { action: 'hide' | 'show' }) => void };
         resizeWindow?: { postMessage: (msg: { action: 'resize'; width: number; height: number }) => void };
         keyboardFocus?: { postMessage: (msg: object) => void };
@@ -27,6 +27,8 @@ declare global {
         getQuadrant?: { postMessage: (msg: object) => void };
         // Input region handler for click-through control (App.tsx)
         setInputRegion?: { postMessage: (msg: { mode: 'character' | 'full'; x?: number; y?: number; width?: number; height?: number }) => void };
+        // Apply anchoring handler - frontend calls this AFTER CSS updates to prevent flicker (App.tsx)
+        applyAnchoring?: { postMessage: (msg: { isRightHalf: boolean; isBottomHalf: boolean; horizontalMargin: number; verticalMargin: number }) => void };
         // Debug logging handler (debug.ts)
         debug?: { postMessage: (msg: { message: string }) => void };
       };

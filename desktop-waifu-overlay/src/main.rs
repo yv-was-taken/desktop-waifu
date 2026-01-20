@@ -2,7 +2,7 @@ mod ipc;
 mod tray;
 
 // Debug logging flag - set to true to enable debug output to terminal
-const DEBUG_LOGGING: bool = false;
+const DEBUG_LOGGING: bool = true;
 
 // Helper macro for conditional debug logging
 macro_rules! debug_log {
@@ -37,25 +37,22 @@ const WINDOW_WIDTH_EXPANDED: i32 = 800;    // Chat + Character
 const WINDOW_HEIGHT_COLLAPSED: i32 = 380;  // Character only
 const WINDOW_HEIGHT_EXPANDED: i32 = 1000;  // Chat + Character (more room for chat)
 
-// Store window position (margins from anchored edges)
+// Store character position (absolute screen coordinates)
+// With fullscreen window, character is positioned via CSS within the window
 #[derive(Clone, Debug)]
-struct WindowPosition {
-    // Vertical margin from anchored edge (bottom or top)
-    vertical: i32,
-    // Horizontal margin from anchored edge (right or left)
-    horizontal: i32,
-    // Which edges we're anchored to
-    anchor_right: bool,
-    anchor_bottom: bool,
+struct CharacterPosition {
+    // X coordinate of character's left edge on screen
+    x: i32,
+    // Y coordinate of character's top edge on screen
+    y: i32,
 }
 
-impl Default for WindowPosition {
+impl Default for CharacterPosition {
     fn default() -> Self {
+        // Default to bottom-right area of a 1920x1080 screen
         Self {
-            vertical: 20,
-            horizontal: 20,
-            anchor_right: true,
-            anchor_bottom: true,
+            x: 1920 - WINDOW_WIDTH_COLLAPSED - 20,
+            y: 1080 - WINDOW_HEIGHT_COLLAPSED - 20,
         }
     }
 }
@@ -67,81 +64,14 @@ struct Quadrant {
     is_bottom_half: bool,
 }
 
-// Hysteresis buffer to prevent flickering at boundaries (in pixels)
-const QUADRANT_HYSTERESIS: i32 = 50;
-
 // Store drag state
 #[derive(Clone, Debug, Default)]
 struct DragState {
-    start_horizontal: i32,
-    start_vertical: i32,
+    start_x: i32,
+    start_y: i32,
     is_dragging: bool,
 }
 
-/// Update layer-shell anchoring based on quadrant
-fn update_anchoring(window: &ApplicationWindow, position: &mut WindowPosition, new_anchor_right: bool, new_anchor_bottom: bool, screen_width: i32, screen_height: i32, window_width: i32, window_height: i32) {
-    // Convert horizontal margin if anchor side changed
-    if position.anchor_right != new_anchor_right {
-        // Window edge position stays the same, but margin is measured from opposite edge
-        // old_edge_pos = screen_size - old_margin - window_size (if anchored to right)
-        // old_edge_pos = old_margin (if anchored to left)
-        // new_margin = screen_size - old_edge_pos - window_size (if switching to right)
-        // new_margin = old_edge_pos (if switching to left)
-
-        if position.anchor_right {
-            // Was anchored right, switching to left
-            // Window's left edge = screen_width - horizontal - window_width
-            let left_edge = screen_width - position.horizontal - window_width;
-            position.horizontal = left_edge.max(0);
-        } else {
-            // Was anchored left, switching to right
-            // Window's right edge = horizontal + window_width
-            // New right margin = screen_width - right_edge = screen_width - horizontal - window_width
-            let right_margin = screen_width - position.horizontal - window_width;
-            position.horizontal = right_margin.max(0);
-        }
-        position.anchor_right = new_anchor_right;
-
-        // Update layer-shell anchoring
-        window.set_anchor(Edge::Right, new_anchor_right);
-        window.set_anchor(Edge::Left, !new_anchor_right);
-    }
-
-    // Convert vertical margin if anchor side changed
-    if position.anchor_bottom != new_anchor_bottom {
-        if position.anchor_bottom {
-            // Was anchored bottom, switching to top
-            let top_edge = screen_height - position.vertical - window_height;
-            position.vertical = top_edge.max(0);
-        } else {
-            // Was anchored top, switching to bottom
-            let bottom_margin = screen_height - position.vertical - window_height;
-            position.vertical = bottom_margin.max(0);
-        }
-        position.anchor_bottom = new_anchor_bottom;
-
-        // Update layer-shell anchoring
-        window.set_anchor(Edge::Bottom, new_anchor_bottom);
-        window.set_anchor(Edge::Top, !new_anchor_bottom);
-    }
-
-    // Apply the new margins
-    if position.anchor_right {
-        window.set_margin(Edge::Right, position.horizontal);
-        window.set_margin(Edge::Left, 0);
-    } else {
-        window.set_margin(Edge::Left, position.horizontal);
-        window.set_margin(Edge::Right, 0);
-    }
-
-    if position.anchor_bottom {
-        window.set_margin(Edge::Bottom, position.vertical);
-        window.set_margin(Edge::Top, 0);
-    } else {
-        window.set_margin(Edge::Top, position.vertical);
-        window.set_margin(Edge::Bottom, 0);
-    }
-}
 
 /// Get screen dimensions from the monitor containing the window
 fn get_screen_dimensions(window: &ApplicationWindow) -> Option<(i32, i32)> {
@@ -150,65 +80,6 @@ fn get_screen_dimensions(window: &ApplicationWindow) -> Option<(i32, i32)> {
     let monitor = display.monitor_at_surface(&surface)?;
     let geometry = monitor.geometry();
     Some((geometry.width(), geometry.height()))
-}
-
-/// Calculate quadrant based on window position (center of window)
-/// Uses hysteresis to prevent flickering at boundaries
-fn calculate_quadrant(
-    position: &WindowPosition,
-    window_width: i32,
-    window_height: i32,
-    screen_width: i32,
-    screen_height: i32,
-    prev_quadrant: &Quadrant,
-) -> Quadrant {
-    // Calculate window center position based on current anchoring
-    let window_center_x = if position.anchor_right {
-        // Anchored to right: margin is from right edge
-        screen_width - position.horizontal - window_width / 2
-    } else {
-        // Anchored to left: margin is from left edge
-        position.horizontal + window_width / 2
-    };
-
-    let window_center_y = if position.anchor_bottom {
-        // Anchored to bottom: margin is from bottom edge
-        screen_height - position.vertical - window_height / 2
-    } else {
-        // Anchored to top: margin is from top edge
-        position.vertical + window_height / 2
-    };
-
-    let screen_center_x = screen_width / 2;
-    let screen_center_y = screen_height / 2;
-
-    // Apply hysteresis: only change quadrant if we've crossed threshold beyond midpoint
-    let is_right_half = if prev_quadrant.is_right_half {
-        // Currently in right half, need to cross left of center - hysteresis to switch
-        window_center_x > screen_center_x - QUADRANT_HYSTERESIS
-    } else {
-        // Currently in left half, need to cross right of center + hysteresis to switch
-        window_center_x > screen_center_x + QUADRANT_HYSTERESIS
-    };
-
-    let is_bottom_half = if prev_quadrant.is_bottom_half {
-        // Currently in bottom half, need to cross above center - hysteresis to switch
-        window_center_y > screen_center_y - QUADRANT_HYSTERESIS
-    } else {
-        // Currently in top half, need to cross below center + hysteresis to switch
-        window_center_y > screen_center_y + QUADRANT_HYSTERESIS
-    };
-
-    Quadrant { is_right_half, is_bottom_half }
-}
-
-/// Send quadrant change event to frontend via WebView
-fn send_quadrant_to_frontend(webview: &WebView, quadrant: &Quadrant) {
-    let js = format!(
-        r#"window.dispatchEvent(new CustomEvent('quadrantChange', {{ detail: {{ isRightHalf: {}, isBottomHalf: {} }} }}))"#,
-        quadrant.is_right_half, quadrant.is_bottom_half
-    );
-    webview.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
 }
 
 fn main() -> Result<()> {
@@ -264,12 +135,15 @@ fn build_ui(app: &Application) {
     // Use OVERLAY layer (above everything)
     window.set_layer(Layer::Overlay);
 
-    // Anchor to bottom-right corner
+    // Anchor to ALL edges (fullscreen window)
+    // This makes the window cover the entire screen
+    window.set_anchor(Edge::Top, true);
     window.set_anchor(Edge::Bottom, true);
+    window.set_anchor(Edge::Left, true);
     window.set_anchor(Edge::Right, true);
 
-    // Initial position (margins from screen edge)
-    let position = Rc::new(RefCell::new(WindowPosition::default()));
+    // Character position (absolute screen coordinates)
+    let position = Rc::new(RefCell::new(CharacterPosition::default()));
 
     // Drag state
     let drag_state = Rc::new(RefCell::new(DragState::default()));
@@ -280,9 +154,11 @@ fn build_ui(app: &Application) {
         is_bottom_half: true,
     }));
 
-    // Set initial margins
-    window.set_margin(Edge::Bottom, position.borrow().vertical);
-    window.set_margin(Edge::Right, position.borrow().horizontal);
+    // No margins needed - window is fullscreen
+    window.set_margin(Edge::Top, 0);
+    window.set_margin(Edge::Bottom, 0);
+    window.set_margin(Edge::Left, 0);
+    window.set_margin(Edge::Right, 0);
 
     // Don't reserve exclusive space
     window.set_exclusive_zone(-1);
@@ -380,7 +256,7 @@ fn build_ui(app: &Application) {
 
 fn create_webview_with_handlers(
     window: &ApplicationWindow,
-    position: Rc<RefCell<WindowPosition>>,
+    position: Rc<RefCell<CharacterPosition>>,
     drag_state: Rc<RefCell<DragState>>,
     quadrant: Rc<RefCell<Quadrant>>,
     tray_handle: Option<ksni::Handle<tray::DesktopWaifuTray>>,
@@ -430,6 +306,7 @@ fn create_webview_with_handlers(
 
     // Register the "setInputRegion" message handler for click-through control
     content_manager.register_script_message_handler("setInputRegion", None);
+
 
     // Clone window for windowControl handler
     let window_for_control = window.clone();
@@ -530,10 +407,11 @@ fn create_webview_with_handlers(
                         let pos = position_for_move.borrow();
                         let mut drag = drag_state_for_move.borrow_mut();
                         drag.is_dragging = true;
-                        drag.start_horizontal = pos.horizontal;
-                        drag.start_vertical = pos.vertical;
+                        drag.start_x = pos.x;
+                        drag.start_y = pos.y;
                     }
                     "drag" => {
+                        // Fullscreen window approach: no margins, position via CSS
                         let drag = drag_state_for_move.borrow();
                         if !drag.is_dragging {
                             return;
@@ -543,45 +421,23 @@ fn create_webview_with_handlers(
                         let offset_x = parsed["offsetX"].as_f64().unwrap_or(0.0) as i32;
                         let offset_y = parsed["offsetY"].as_f64().unwrap_or(0.0) as i32;
 
-                        let pos = position_for_move.borrow();
-                        let anchor_right = pos.anchor_right;
-                        let anchor_bottom = pos.anchor_bottom;
-                        drop(pos);
+                        // Simple position update: start position + offset
+                        let new_x = drag.start_x + offset_x;
+                        let new_y = drag.start_y + offset_y;
 
-                        // Calculate new margins based on anchor direction
-                        // Moving right (positive offsetX): decrease margin if anchored right, increase if anchored left
-                        // Moving down (positive offsetY): decrease margin if anchored bottom, increase if anchored top
-                        let new_horizontal = if anchor_right {
-                            (drag.start_horizontal - offset_x).max(0)
-                        } else {
-                            (drag.start_horizontal + offset_x).max(0)
-                        };
-
-                        let new_vertical = if anchor_bottom {
-                            (drag.start_vertical - offset_y).max(0)
-                        } else {
-                            (drag.start_vertical + offset_y).max(0)
-                        };
-
-                        // Update position
+                        // Update stored position
                         {
                             let mut pos = position_for_move.borrow_mut();
-                            pos.horizontal = new_horizontal;
-                            pos.vertical = new_vertical;
+                            pos.x = new_x;
+                            pos.y = new_y;
                         }
 
-                        // Apply new margins to the appropriate edges
-                        if anchor_right {
-                            window_for_move.set_margin(Edge::Right, new_horizontal);
-                        } else {
-                            window_for_move.set_margin(Edge::Left, new_horizontal);
-                        }
-
-                        if anchor_bottom {
-                            window_for_move.set_margin(Edge::Bottom, new_vertical);
-                        } else {
-                            window_for_move.set_margin(Edge::Top, new_vertical);
-                        }
+                        // Send position to frontend for CSS update
+                        let js = format!(
+                            "window.dispatchEvent(new CustomEvent('characterMove', {{ detail: {{ x: {}, y: {} }} }}))",
+                            new_x, new_y
+                        );
+                        webview_for_move.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
                     }
                     "endDrag" => {
                         {
@@ -589,48 +445,41 @@ fn create_webview_with_handlers(
                             drag.is_dragging = false;
                         }
 
-                        // Calculate and update quadrant/anchoring on drag end
+                        // Calculate quadrant for chat positioning
                         if let Some((screen_width, screen_height)) = get_screen_dimensions(&window_for_move) {
-                            let window_width = window_for_move.width();
-                            let window_height = window_for_move.height();
+                            let pos = position_for_move.borrow();
 
-                            let new_quadrant = {
-                                let pos = position_for_move.borrow();
-                                calculate_quadrant(
-                                    &pos,
-                                    window_width,
-                                    window_height,
-                                    screen_width,
-                                    screen_height,
-                                    &quadrant_for_move.borrow(),
-                                )
-                            };
+                            // Character center position
+                            let char_center_x = pos.x + WINDOW_WIDTH_COLLAPSED / 2;
+                            let char_center_y = pos.y + WINDOW_HEIGHT_COLLAPSED / 2;
 
-                            // Check if quadrant changed
-                            let prev = quadrant_for_move.borrow().clone();
-                            let quadrant_changed = new_quadrant.is_right_half != prev.is_right_half
-                                || new_quadrant.is_bottom_half != prev.is_bottom_half;
+                            let new_is_right = char_center_x >= screen_width / 2;
+                            let new_is_bottom = char_center_y >= screen_height / 2;
+
+                            let prev = quadrant_for_move.borrow();
+                            let quadrant_changed = new_is_right != prev.is_right_half
+                                || new_is_bottom != prev.is_bottom_half;
 
                             if quadrant_changed {
-                                // Update anchoring based on new quadrant
-                                {
-                                    let mut pos = position_for_move.borrow_mut();
-                                    update_anchoring(
-                                        &window_for_move,
-                                        &mut pos,
-                                        new_quadrant.is_right_half,
-                                        new_quadrant.is_bottom_half,
-                                        screen_width,
-                                        screen_height,
-                                        window_width,
-                                        window_height,
-                                    );
-                                }
+                                debug_log!("[ENDDRAG] Quadrant changed: ({},{}) -> ({},{})",
+                                    prev.is_right_half, prev.is_bottom_half, new_is_right, new_is_bottom);
+                                drop(prev);
 
+                                let new_quadrant = Quadrant {
+                                    is_right_half: new_is_right,
+                                    is_bottom_half: new_is_bottom,
+                                };
                                 *quadrant_for_move.borrow_mut() = new_quadrant.clone();
-                                send_quadrant_to_frontend(&webview_for_move, &new_quadrant);
+
+                                // Send quadrant to frontend for chat positioning
+                                let js = format!(
+                                    "window.dispatchEvent(new CustomEvent('quadrantChange', {{ detail: {{ isRightHalf: {}, isBottomHalf: {} }} }}))",
+                                    new_is_right, new_is_bottom
+                                );
+                                webview_for_move.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
                             }
                         }
+                        debug_log!("[ENDDRAG] Drag finished");
                     }
                     _ => {}
                 }
@@ -788,32 +637,33 @@ fn create_webview_with_handlers(
         }
     });
 
-    // Set up getQuadrant handler for initial quadrant state request from frontend
+    // Set up getQuadrant handler - sends initial position and quadrant to frontend
     let window_for_quadrant = window.clone();
     let webview_for_quadrant = webview.clone();
     let position_for_quadrant = position.clone();
     let quadrant_for_get = quadrant.clone();
     content_manager.connect_script_message_received(Some("getQuadrant"), move |_manager, _js_value| {
-        // Calculate current quadrant based on window position
         if let Some((screen_width, screen_height)) = get_screen_dimensions(&window_for_quadrant) {
             let pos = position_for_quadrant.borrow();
-            let window_width = window_for_quadrant.width();
-            let window_height = window_for_quadrant.height();
 
-            let current_quadrant = calculate_quadrant(
-                &pos,
-                window_width,
-                window_height,
-                screen_width,
-                screen_height,
-                &quadrant_for_get.borrow(),
-            );
+            // Calculate quadrant from absolute position
+            let char_center_x = pos.x + WINDOW_WIDTH_COLLAPSED / 2;
+            let char_center_y = pos.y + WINDOW_HEIGHT_COLLAPSED / 2;
+            let is_right = char_center_x >= screen_width / 2;
+            let is_bottom = char_center_y >= screen_height / 2;
 
-            // Update stored quadrant
+            let current_quadrant = Quadrant {
+                is_right_half: is_right,
+                is_bottom_half: is_bottom,
+            };
             *quadrant_for_get.borrow_mut() = current_quadrant.clone();
 
-            // Send to frontend
-            send_quadrant_to_frontend(&webview_for_quadrant, &current_quadrant);
+            // Send initial state to frontend: position + quadrant + screen dimensions
+            let js = format!(
+                r#"window.dispatchEvent(new CustomEvent('initialState', {{ detail: {{ x: {}, y: {}, isRightHalf: {}, isBottomHalf: {}, screenWidth: {}, screenHeight: {} }} }}))"#,
+                pos.x, pos.y, is_right, is_bottom, screen_width, screen_height
+            );
+            webview_for_quadrant.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
         }
     });
 
