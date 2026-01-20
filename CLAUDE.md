@@ -72,6 +72,8 @@ Create a folder in `src/characters/` with:
 
 **ALWAYS use `debugLog()` from `src/lib/debug.ts` instead:**
 1. Import: `import { debugLog } from '../../lib/debug';`
-2. Set `DEBUG_ENABLED = true` in `src/lib/debug.ts` to enable output
+2. Enable debug flags in **BOTH** locations:
+   - Client: Set `DEBUG_ENABLED = true` in `src/lib/debug.ts`
+   - Server: Set `DEBUG_LOGGING = true` in `desktop-waifu-overlay/src/main.rs`
 3. Use: `debugLog('your message here');`
 4. Messages will appear in the terminal where `bun dev` is running

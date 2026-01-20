@@ -6,10 +6,17 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { ChatMessage, LLMProviderType } from '../../types';
 import { useAppStore } from '../../store';
 import { defaultModels } from '../../lib/llm';
+import { debugLog } from '../../lib/debug';
 
 interface MessageListProps {
   messages: ChatMessage[];
   isTyping: boolean;
+}
+
+// Request keyboard focus from Wayland compositor (for layer-shell overlay)
+function requestKeyboardFocus() {
+  debugLog('[ApiKeySetup] Requesting keyboard focus from compositor');
+  window.webkit?.messageHandlers?.keyboardFocus?.postMessage({});
 }
 
 function ApiKeySetup() {
@@ -30,8 +37,15 @@ function ApiKeySetup() {
     }
   };
 
+  // Request keyboard focus when clicking anywhere in setup area
+  const handleClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    debugLog(`[ApiKeySetup] onClick - target: ${target.tagName}, closest form el: ${target.closest('select, input, button')?.tagName || 'none'}`);
+    requestKeyboardFocus();
+  };
+
   return (
-    <div className="bg-white border border-white p-4 mx-2">
+    <div className="bg-white border border-white p-4 mx-2" onClick={handleClick}>
       <div className="transform">
         <div className="text-center mb-4">
           <p className="text-black text-sm font-black uppercase">Welcome! Let's get you set up</p>
@@ -44,7 +58,15 @@ function ApiKeySetup() {
             <label className="block text-xs text-black font-bold uppercase mb-1">Provider</label>
             <select
               value={settings.llmProvider}
-              onChange={(e) => handleProviderChange(e.target.value as LLMProviderType)}
+              onChange={(e) => {
+                debugLog(`[ApiKeySetup] Provider onChange: ${e.target.value}`);
+                handleProviderChange(e.target.value as LLMProviderType);
+              }}
+              onFocus={() => debugLog('[ApiKeySetup] Provider select onFocus')}
+              onMouseDown={(e) => {
+                debugLog('[ApiKeySetup] Provider select onMouseDown');
+                e.stopPropagation();
+              }}
               className="w-full bg-gray-100 text-black border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
             >
               <option value="openai">OpenAI</option>
@@ -58,7 +80,15 @@ function ApiKeySetup() {
             <label className="block text-xs text-black font-bold uppercase mb-1">Model</label>
             <select
               value={settings.llmModel}
-              onChange={(e) => updateSettings({ llmModel: e.target.value })}
+              onChange={(e) => {
+                debugLog(`[ApiKeySetup] Model onChange: ${e.target.value}`);
+                updateSettings({ llmModel: e.target.value });
+              }}
+              onFocus={() => debugLog('[ApiKeySetup] Model select onFocus')}
+              onMouseDown={(e) => {
+                debugLog('[ApiKeySetup] Model select onMouseDown');
+                e.stopPropagation();
+              }}
               className="w-full bg-gray-100 text-black border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
             >
               {defaultModels[settings.llmProvider].map((model) => (
@@ -75,7 +105,15 @@ function ApiKeySetup() {
             <input
               type="password"
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              onChange={(e) => {
+                debugLog(`[ApiKeySetup] API Key onChange: ${e.target.value.length} chars`);
+                setApiKey(e.target.value);
+              }}
+              onFocus={() => debugLog('[ApiKeySetup] API Key input onFocus')}
+              onMouseDown={(e) => {
+                debugLog('[ApiKeySetup] API Key input onMouseDown');
+                e.stopPropagation();
+              }}
               placeholder={`Enter your ${settings.llmProvider === 'openai' ? 'OpenAI' : settings.llmProvider === 'anthropic' ? 'Anthropic' : 'Gemini'} API key`}
               className="w-full bg-gray-100 text-black border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 placeholder-gray-400"
               onKeyDown={(e) => e.key === 'Enter' && handleSaveKey()}
@@ -125,6 +163,16 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
       className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 chat-scroll"
       onMouseDown={(e) => {
         // Prevent clicks from stealing focus from textarea (Slack/Discord behavior)
+        // But allow default for form elements that need it (select, input, button)
+        const target = e.target as HTMLElement;
+        const closestFormEl = target.closest('select, input, button');
+        debugLog(`[MessageList] onMouseDown - target: ${target.tagName}, closest form el: ${closestFormEl?.tagName || 'none'}`);
+        // Check if target or any ancestor is a form element
+        if (closestFormEl) {
+          debugLog('[MessageList] onMouseDown - allowing default for form element');
+          return;
+        }
+        debugLog('[MessageList] onMouseDown - preventing default');
         e.preventDefault();
       }}
     >
