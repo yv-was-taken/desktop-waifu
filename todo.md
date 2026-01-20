@@ -6,7 +6,6 @@
     - talking animation is bad. either replace it or get rid of it, can supplement response fetching with a spin or something similar
     - running animation for hiding/unhiding
 - clean up model choices (remove bad ones that don't fit thematically)
-- fix model teleportation bug on chat opening
 ## post launch
 - publish on yay + apt (if possible?), homebrew, wherever possible, curl maybe
 - test if this works on other destop environments (hyprland, etc)
