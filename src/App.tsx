@@ -54,6 +54,7 @@ function OverlayMode() {
   const setHiding = useAppStore((state) => state.setHiding);
   const characterScale = useAppStore((state) => state.settings.characterScale) ?? 1.0;
   const chatScale = useAppStore((state) => state.settings.chatScale) ?? 1.0;
+  const showSettings = useAppStore((state) => state.settings.showSettings);
   const quadrant = useAppStore((state) => state.ui.quadrant);
   const setQuadrant = useAppStore((state) => state.setQuadrant);
 
@@ -173,9 +174,12 @@ function OverlayMode() {
     window.webkit?.messageHandlers?.getQuadrant?.postMessage({});
   }, []);
 
-  // Update input region for click-through when chat opens/closes or character moves
+  // Update input region for click-through when chat opens/closes, settings modal, or character moves
   useEffect(() => {
-    if (chatPanelOpen) {
+    if (showSettings) {
+      // Settings modal is open: allow clicks everywhere
+      setInputRegion('full');
+    } else if (chatPanelOpen) {
       // Chat is open: set input region to character + chat area
       // Calculate chat bounds based on character position and quadrant
       const chatX = quadrant.isRightHalf
@@ -206,7 +210,7 @@ function OverlayMode() {
         height: scaledCharacterHeight,
       });
     }
-  }, [chatPanelOpen, characterPos, scaledCharacterWidth, scaledCharacterHeight, scaledChatWidth, scaledChatHeight, quadrant]);
+  }, [showSettings, chatPanelOpen, characterPos, scaledCharacterWidth, scaledCharacterHeight, scaledChatWidth, scaledChatHeight, quadrant]);
 
   // Trigger hide sequence: set hiding state, wait for animation, then tell Rust to hide
   const triggerHide = useCallback(() => {

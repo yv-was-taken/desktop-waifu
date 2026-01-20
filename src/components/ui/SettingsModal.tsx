@@ -36,7 +36,7 @@ export function SettingsModal() {
           <h2 className="text-white text-lg font-semibold">Settings</h2>
           <button
             onClick={toggleSettings}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-400 hover:text-white transition-colors cursor-grab"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -248,7 +248,7 @@ export function SettingsModal() {
         <div className="mt-6 pt-4 border-t border-gray-700">
           <button
             onClick={toggleSettings}
-            className="w-full bg-gradient-to-r from-teal-400 to-cyan-400 text-white rounded-lg py-2 font-medium text-sm hover:opacity-90 transition-opacity"
+            className="w-full bg-gradient-to-r from-teal-400 to-cyan-400 text-white rounded-lg py-2 font-medium text-sm hover:opacity-90 transition-opacity cursor-grab"
           >
             Done
           </button>
