@@ -190,6 +190,67 @@ Choose from 7 personality presets that affect how the AI responds:
 | Creative Partner | Imaginative, collaborative, artistic |
 | Assistant | Professional, efficient, knowledgeable |
 
+### Adding Models
+
+Model files must be in **VRM format** (`.vrm`). The application uses `@pixiv/three-vrm` which only supports VRM files.
+
+**Adding a new character:**
+
+1. Place your `.vrm` file in `public/characters/` (e.g., `public/characters/mycharacter.vrm`)
+
+2. Register the character in `src/characters/index.ts`:
+
+```typescript
+export const characters: Record<string, Character> = {
+  // ... existing characters
+  mycharacter: createCharacter('mycharacter', 'My Character', {
+    scale: 0.8,        // Adjust for character height
+    rotation: [0, 0, 0] // May need adjustment based on model orientation
+  }),
+};
+```
+
+**Configuration options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `scale` | `0.8` | Controls character size. Adjust if your model appears too tall/short |
+| `position` | `[0, -1, 0]` | World position `[x, y, z]`. Y offset positions the model vertically |
+| `rotation` | `[0, Math.PI, 0]` | Rotation in radians. Some models face +Z natively and need `[0, 0, 0]` |
+
+**Important: Manual verification required**
+
+VRM models vary significantly in their default height and orientation. After adding a new model, you must visually verify it fits correctly within the canvas:
+
+- **Height issues:** Some models may appear too tall (head cut off) or too short. Adjust the `scale` value in the config until the character fits properly in the viewport.
+- **Rotation issues:** Some models face away from the camera by default. If your character's back is facing you, try changing `rotation` to `[0, 0, 0]` or adjust the Y-axis rotation value.
+
+Test your model by running `bun dev` and selecting your character to verify it displays correctly.
+
+**Contributing models:** If you'd like to add new characters to the project, please submit a Pull Request with your `.vrm` file and the corresponding config entry. Ensure the `scale` and `rotation` values are properly calibrated before submitting. Include screenshots or videos in your PR demonstrating that the character is positioned correctly in the canvas and that animations display properly.
+
+### Adding Animations
+
+Animation files must be in **VRMA format** (`.vrma`), not FBX. The application uses `@pixiv/three-vrm-animation` which only supports VRMA files.
+
+**Converting FBX to VRMA:**
+
+If you have FBX animation files (e.g., from [Mixamo](https://www.mixamo.com/)), convert them using [fbx2vrma-converter](https://github.com/tk256ailab/fbx2vrma-converter):
+
+```bash
+# Clone and set up the converter
+git clone https://github.com/tk256ailab/fbx2vrma-converter.git
+cd fbx2vrma-converter
+bun install
+
+# Convert an FBX file to VRMA
+bun run fbx2vrma-converter.js -i /path/to/animation.fbx -o /path/to/output.vrma
+```
+
+Place converted `.vrma` files in `public/animations/`.
+
+**Contributing animations:** If you'd like to add new animations to the project, please submit a Pull Request with your converted `.vrma` files.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
