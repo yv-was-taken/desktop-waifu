@@ -5,7 +5,7 @@ class DesktopWaifu < Formula
   desc "Animated 3D VRM characters with AI-powered conversational chat"
   homepage "https://github.com/yv-was-taken/desktop-waifu"
   url "https://github.com/yv-was-taken/desktop-waifu/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "PLACEHOLDER_SHA256"
+  sha256 "caa1151e7f6e5d91f678d84797f9a8ba8c371701d961096946e7649e5f1357eb"
   license "MIT"
   head "https://github.com/yv-was-taken/desktop-waifu.git", branch: "master"
 
