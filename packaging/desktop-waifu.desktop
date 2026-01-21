@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Desktop Waifu
+Comment=Animated 3D VRM characters with AI-powered conversational chat
+Exec=desktop-waifu
+Icon=desktop-waifu
+Terminal=false
+Type=Application
+Categories=Game;Entertainment;
+Keywords=desktop-pet;vtuber;vrm;ai;waifu;
+StartupNotify=true
+StartupWMClass=desktop-waifu

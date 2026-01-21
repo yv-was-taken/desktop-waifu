@@ -1,0 +1,39 @@
+Source: desktop-waifu
+Section: games
+Priority: optional
+Maintainer: yv-was-taken <yvmail@proton.me>
+Build-Depends: debhelper-compat (= 13),
+               cargo,
+               rustc,
+               libgtk-4-dev,
+               libwebkitgtk-6.0-dev,
+               libcairo2-dev,
+               libglib2.0-dev,
+               libpango1.0-dev,
+               libwayland-dev,
+               libdbus-1-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/yv-was-taken/desktop-waifu
+Rules-Requires-Root: no
+
+Package: desktop-waifu
+Architecture: amd64
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         libgtk-4-1,
+         libwebkitgtk-6.0-4,
+         libcairo2,
+         libglib2.0-0,
+         libpango-1.0-0,
+         libwayland-client0,
+         libdbus-1-3
+Description: Animated 3D VRM characters with AI-powered conversational chat
+ Desktop Waifu is an animated 3D desktop companion featuring VRM characters
+ with AI-powered conversational abilities. It runs as a Wayland layer shell
+ overlay, providing a persistent desktop pet experience.
+ .
+ Features:
+  - 3D VRM character rendering with animations
+  - AI-powered chat with multiple LLM providers
+  - Wayland overlay mode for seamless desktop integration
+  - Customizable characters and personalities

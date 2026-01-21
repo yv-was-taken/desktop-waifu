@@ -1,0 +1,162 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            libwebkitgtk-6.0-dev \
+            libcairo2-dev \
+            libglib2.0-dev \
+            libpango1.0-dev \
+            libwayland-dev \
+            libdbus-1-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build frontend
+        run: bun run build:web
+
+      - name: Build Linux binary
+        run: cargo build --release --manifest-path desktop-waifu-overlay/Cargo.toml
+
+      - name: Create tarball
+        run: |
+          mkdir -p release/desktop-waifu
+          cp target/release/desktop-waifu release/desktop-waifu/
+          cp -r dist release/desktop-waifu/
+          cp LICENSE README.md release/desktop-waifu/
+          cp packaging/desktop-waifu.desktop release/desktop-waifu/
+          cd release
+          tar -czvf desktop-waifu-linux-x86_64.tar.gz desktop-waifu
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release
+          path: release/desktop-waifu-linux-x86_64.tar.gz
+
+  build-deb:
+    runs-on: ubuntu-24.04
+    needs: build-linux
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            devscripts \
+            debhelper \
+            libgtk-4-dev \
+            libwebkitgtk-6.0-dev \
+            libcairo2-dev \
+            libglib2.0-dev \
+            libpango1.0-dev \
+            libwayland-dev \
+            libdbus-1-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Copy debian files to root
+        run: cp -r packaging/debian .
+
+      - name: Build .deb package
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Move .deb to workspace
+        run: mv ../desktop-waifu_*.deb .
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-release
+          path: desktop-waifu_*.deb
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Tauri CLI
+        run: bun add -g @tauri-apps/cli
+
+      - name: Build Tauri app
+        run: bun tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.app
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-deb, build-macos]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/linux-release/*
+            artifacts/deb-release/*
+            artifacts/macos-release/**/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

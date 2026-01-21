@@ -1,9 +1,19 @@
 [package]
-name = "desktop-waifu-overlay"
+name = "desktop-waifu"
 version = "0.1.0"
 edition = "2024"
-description = "Wayland layer shell overlay for desktop-waifu with embedded WebView"
+description = "Animated 3D VRM characters with AI-powered conversational chat - Wayland overlay"
 license = "MIT"
+authors = ["yv-was-taken <yvmail@proton.me>"]
+repository = "https://github.com/yv-was-taken/desktop-waifu"
+homepage = "https://github.com/yv-was-taken/desktop-waifu"
+keywords = ["desktop-pet", "vtuber", "vrm", "ai", "wayland"]
+categories = ["games"]
+readme = "../README.md"
+
+[[bin]]
+name = "desktop-waifu"
+path = "src/main.rs"
 
 [dependencies]
 # GTK4 ecosystem

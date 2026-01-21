@@ -1,0 +1,35 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+export CARGO_HOME = $(CURDIR)/debian/cargo_home
+export RUSTUP_TOOLCHAIN = stable
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	# Install bun if not available
+	if ! command -v bun >/dev/null 2>&1; then \
+		curl -fsSL https://bun.sh/install | bash; \
+		export PATH="$$HOME/.bun/bin:$$PATH"; \
+	fi
+
+override_dh_auto_build:
+	# Build frontend
+	bun install --frozen-lockfile
+	bun run build:web
+	# Build Rust binary
+	cargo build --release --manifest-path desktop-waifu-overlay/Cargo.toml
+
+override_dh_auto_install:
+	# Install binary (built in desktop-waifu-overlay subdirectory)
+	install -Dm755 desktop-waifu-overlay/target/release/desktop-waifu debian/desktop-waifu/usr/bin/desktop-waifu
+	# Install frontend assets
+	install -dm755 debian/desktop-waifu/usr/share/desktop-waifu
+	cp -r dist/* debian/desktop-waifu/usr/share/desktop-waifu/
+	# Install desktop entry
+	install -Dm644 packaging/desktop-waifu.desktop debian/desktop-waifu/usr/share/applications/desktop-waifu.desktop
+
+override_dh_auto_clean:
+	cargo clean --manifest-path desktop-waifu-overlay/Cargo.toml || true
+	rm -rf node_modules dist
