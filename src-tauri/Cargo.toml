@@ -1,6 +1,6 @@
 [package]
 name = "desktop-waifu-tauri"
-version = "0.1.0"
+version = "0.1.1"
 description = "Animated 3D VRM characters with AI-powered conversational chat - Tauri app"
 authors = ["yv-was-taken <yvmail@proton.me>"]
 edition = "2021"
