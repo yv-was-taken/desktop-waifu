@@ -33,17 +33,25 @@ pub fn find_dist_dir() -> Option<PathBuf> {
     None
 }
 
-/// Start a static file server on a random available port
+/// Start a static file server on a fixed port for localStorage persistence
 /// Returns the port number the server is listening on
 pub async fn start_static_server(dist_path: PathBuf) -> Result<u16, String> {
     let serve_dir = ServeDir::new(&dist_path);
     let app = Router::new().fallback_service(serve_dir);
 
-    // Bind to localhost with port 0 to get a random available port
-    let addr = SocketAddr::from(([127, 0, 0, 1], 0));
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .map_err(|e| format!("Failed to bind server: {}", e))?;
+    // Try fixed port 1421 first for localStorage persistence, fallback to random if unavailable
+    let preferred_port = 1421;
+    let addr = SocketAddr::from(([127, 0, 0, 1], preferred_port));
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(_) => {
+            // Fallback to random port if 1421 is in use
+            let fallback_addr = SocketAddr::from(([127, 0, 0, 1], 0));
+            tokio::net::TcpListener::bind(fallback_addr)
+                .await
+                .map_err(|e| format!("Failed to bind server: {}", e))?
+        }
+    };
 
     let port = listener
         .local_addr()
