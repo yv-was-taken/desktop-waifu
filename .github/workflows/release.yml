@@ -129,7 +129,7 @@ jobs:
         run: cp -r packaging/debian .
 
       - name: Build .deb package
-        run: dpkg-buildpackage -us -uc -b
+        run: dpkg-buildpackage -us -uc -b -d
 
       - name: Move .deb to workspace
         run: mv ../desktop-waifu_*.deb .
