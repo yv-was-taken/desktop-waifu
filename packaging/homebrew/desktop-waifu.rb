@@ -47,11 +47,11 @@ class DesktopWaifu < Formula
       cd "desktop-waifu-overlay" do
         system "cargo", "build", "--release"
       end
-      bin.install "target/release/desktop-waifu"
+      bin.install "desktop-waifu-overlay/target/release/desktop-waifu-overlay" => "desktop-waifu"
     end
 
     # Install frontend assets
-    (share/"desktop-waifu").install Dir["dist/*"]
+    (share/"desktop-waifu/dist").install Dir["dist/*"]
   end
 
   def caveats
