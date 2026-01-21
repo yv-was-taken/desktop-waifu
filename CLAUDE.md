@@ -66,6 +66,19 @@ Create a folder in `src/characters/` with:
 2. Register in `src/lib/llm/index.ts`
 3. Add model options to settings store
 
+## Package Distribution
+
+The project is published to package registries. When bumping versions, update all packaging files and they will automatically be available:
+
+- **AUR**: `yay -S desktop-waifu` (packaging/aur/PKGBUILD)
+- **Homebrew**: `brew install desktop-waifu` (packaging/homebrew/desktop-waifu.rb)
+- **Debian**: packaging/debian/
+
+After version bump, create and push a git tag (e.g., `git tag v0.1.1 && git push origin v0.1.1`), then update the Homebrew sha256 with:
+```bash
+curl -sL https://github.com/yv-was-taken/desktop-waifu/archive/refs/tags/vX.X.X.tar.gz | sha256sum
+```
+
 ## Debugging
 
 **NEVER use `console.log()` for debugging.** Client-side console.log will NOT appear in the terminal running `bun dev` - it only shows in browser devtools which are not accessible in the overlay.
