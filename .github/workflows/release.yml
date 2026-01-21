@@ -19,6 +19,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libgtk-4-dev \
+            libgtk4-layer-shell-dev \
             libwebkitgtk-6.0-dev \
             libcairo2-dev \
             libglib2.0-dev \
@@ -72,6 +73,7 @@ jobs:
             devscripts \
             debhelper \
             libgtk-4-dev \
+            libgtk4-layer-shell-dev \
             libwebkitgtk-6.0-dev \
             libcairo2-dev \
             libglib2.0-dev \
@@ -118,11 +120,14 @@ jobs:
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build frontend
+        run: bun run build:web
+
       - name: Install Tauri CLI
         run: bun add -g @tauri-apps/cli
 
       - name: Build Tauri app
-        run: bun tauri build
+        run: bun tauri build --config '{"build":{"beforeBuildCommand":""}}'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
