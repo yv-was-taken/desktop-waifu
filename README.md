@@ -95,14 +95,19 @@ desktop-waifu/
 │   │   └── ui/            # Settings modal, shared UI components
 │   ├── lib/
 │   │   ├── llm/providers/ # LLM provider implementations
-│   │   └── personalities/ # Personality definitions and prompts
+│   │   ├── personalities/ # Personality definitions and prompts
+│   │   └── three/         # Three.js utilities
 │   ├── characters/        # Character configuration
-│   └── store/             # Zustand state management
+│   ├── hooks/             # React hooks
+│   ├── store/             # Zustand state management
+│   └── types/             # TypeScript type definitions
 ├── public/
 │   ├── characters/        # VRM model files
 │   └── animations/        # VRMAnimation files
 ├── desktop-waifu-overlay/ # Rust GTK4 overlay application
-└── src-tauri/             # Tauri backend configuration
+├── packaging/             # Distribution packaging (AUR, deb, Homebrew)
+├── scripts/               # Build scripts
+└── src-tauri/             # Tauri configuration
 ```
 
 ## Getting Started
