@@ -19,13 +19,28 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libgtk-4-dev \
-            libgtk4-layer-shell-dev \
             libwebkitgtk-6.0-dev \
             libcairo2-dev \
             libglib2.0-dev \
             libpango1.0-dev \
             libwayland-dev \
-            libdbus-1-dev
+            libdbus-1-dev \
+            meson \
+            ninja-build \
+            libwayland-dev \
+            libgtk-4-dev \
+            gobject-introspection \
+            libgirepository1.0-dev \
+            valac
+
+      - name: Build and install gtk4-layer-shell
+        run: |
+          git clone https://github.com/wmww/gtk4-layer-shell.git
+          cd gtk4-layer-shell
+          meson setup build
+          ninja -C build
+          sudo ninja -C build install
+          sudo ldconfig
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -73,13 +88,26 @@ jobs:
             devscripts \
             debhelper \
             libgtk-4-dev \
-            libgtk4-layer-shell-dev \
             libwebkitgtk-6.0-dev \
             libcairo2-dev \
             libglib2.0-dev \
             libpango1.0-dev \
             libwayland-dev \
-            libdbus-1-dev
+            libdbus-1-dev \
+            meson \
+            ninja-build \
+            gobject-introspection \
+            libgirepository1.0-dev \
+            valac
+
+      - name: Build and install gtk4-layer-shell
+        run: |
+          git clone https://github.com/wmww/gtk4-layer-shell.git
+          cd gtk4-layer-shell
+          meson setup build
+          ninja -C build
+          sudo ninja -C build install
+          sudo ldconfig
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -127,18 +155,21 @@ jobs:
         run: bun add -g @tauri-apps/cli
 
       - name: Build Tauri app
-        run: bun tauri build --config '{"build":{"beforeBuildCommand":""}}'
+        run: bun tauri build --config '{"build":{"beforeBuildCommand":""},"bundle":{"targets":["app"]}}'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Create zip of app bundle
+        run: |
+          cd src-tauri/target/release/bundle/macos
+          zip -r "Desktop-Waifu_0.1.0_macos.zip" "Desktop Waifu.app"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-release
-          path: |
-            src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/macos/*.app
+          path: src-tauri/target/release/bundle/macos/*.zip
 
   release:
     runs-on: ubuntu-latest
