@@ -20,7 +20,7 @@ jobs:
           sudo apt-get install -y \
             libgtk-3-dev \
             libgtk-4-dev \
-            libwebkitgtk-4.1-dev \
+            libwebkit2gtk-4.1-dev \
             libwebkitgtk-6.0-dev \
             libcairo2-dev \
             libglib2.0-dev \
@@ -95,7 +95,7 @@ jobs:
             debhelper \
             libgtk-3-dev \
             libgtk-4-dev \
-            libwebkitgtk-4.1-dev \
+            libwebkit2gtk-4.1-dev \
             libwebkitgtk-6.0-dev \
             libcairo2-dev \
             libglib2.0-dev \
