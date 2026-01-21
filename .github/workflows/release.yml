@@ -62,7 +62,7 @@ jobs:
       - name: Create tarball
         run: |
           mkdir -p release/desktop-waifu
-          cp target/release/desktop-waifu release/desktop-waifu/
+          cp desktop-waifu-overlay/target/release/desktop-waifu release/desktop-waifu/
           cp -r dist release/desktop-waifu/
           cp LICENSE README.md release/desktop-waifu/
           cp packaging/desktop-waifu.desktop release/desktop-waifu/
