@@ -140,6 +140,7 @@ function ApiKeySetup() {
 export function MessageList({ messages, isTyping }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const apiKey = useAppStore((state) => state.settings.apiKey);
+  const fontSize = useAppStore((state) => state.settings.fontSize);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -203,7 +204,7 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
                   : 'bg-[#111111] text-white border-2 border-slate-600 [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%,0_8px)]'
               }`}
             >
-              <div className={`text-sm leading-relaxed break-words ${hasHtmlContent ? '' : 'prose prose-sm max-w-none prose-invert'}`}>
+              <div className={`leading-relaxed break-words ${hasHtmlContent ? '' : 'prose prose-sm max-w-none prose-invert'}`} style={{ fontSize: `${fontSize ?? 14}px` }}>
                 {hasHtmlContent ? (
                   <div
                     className="terminal-container"

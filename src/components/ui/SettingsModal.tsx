@@ -231,6 +231,22 @@ export function SettingsModal() {
             />
           </div>
 
+          {/* Font Size */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">
+              Font Size: {settings.fontSize ?? 14}px
+            </label>
+            <input
+              type="range"
+              min="10"
+              max="24"
+              step="1"
+              value={settings.fontSize ?? 14}
+              onChange={(e) => updateSettings({ fontSize: parseInt(e.target.value) })}
+              className="w-full accent-teal-400"
+            />
+          </div>
+
           {/* Always on Top */}
           <div className="flex items-center justify-between">
             <label className="text-sm text-gray-300">Always on Top</label>
