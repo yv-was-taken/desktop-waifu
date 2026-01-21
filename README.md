@@ -12,9 +12,7 @@ A desktop companion app featuring animated 3D VRM characters with AI-powered con
 - **6 Selectable 3D Characters** - Fully animated VRM models with idle, talking, and expression animations
 - **Multi-Provider LLM Support** - OpenAI, Anthropic Claude, and Google Gemini integration
 - **7 Customizable Personalities** - From friendly companion to professional tutor
-- **Dual Display Modes**:
-  - Normal window mode (cross-platform)
-  - Wayland overlay mode (desktop pet that floats above other windows)
+- **Desktop Overlay Mode** - Floats above other windows as a desktop pet (currently Wayland-only, cross-platform planned)
 - **Streaming Chat** - Real-time responses with full markdown support
 - **Persistent Settings** - Character, personality, and API preferences saved locally
 
@@ -39,6 +37,8 @@ sudo dpkg -i desktop-waifu_0.1.0-1_amd64.deb
 ```
 
 ### macOS (Homebrew)
+
+> **Note:** macOS support is planned but not yet available. The formula is published for future use.
 
 ```bash
 brew tap yv-was-taken/desktop-waifu
@@ -70,20 +70,19 @@ See [Getting Started](#getting-started) below.
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS |
 | 3D | Three.js, React Three Fiber, @pixiv/three-vrm |
 | State | Zustand with localStorage persistence |
-| Desktop | Tauri 2 (Rust backend) |
-| Overlay | GTK4 Layer Shell (Wayland) |
+| Desktop | GTK4 Layer Shell overlay + Tauri (launcher) |
 | LLM | OpenAI, Anthropic, Google Gemini SDKs |
 
 ## Compatibility
 
-| Platform | Window Mode | Overlay Mode |
-|----------|-------------|--------------|
-| Linux (Wayland) | ✅ | ✅ |
-| Linux (X11) | ✅ | ❌ |
-| macOS | ✅ | ❌ |
-| Windows | ✅ | ❌ |
+Desktop Waifu currently requires **Linux with Wayland**. Cross-platform support is planned for future releases.
 
-The overlay "desktop pet" mode uses GTK4 Layer Shell which is Wayland-specific. Standard window mode works on all platforms supported by Tauri.
+| Platform | Status |
+|----------|--------|
+| Linux (Wayland) | ✅ Supported |
+| Linux (X11) | 🚧 Planned |
+| macOS | 🚧 Planned |
+| Windows | 🚧 Planned |
 
 ## Repository Structure
 
@@ -111,12 +110,9 @@ desktop-waifu/
 ### Prerequisites
 
 - [Bun](https://bun.sh/) (JavaScript runtime and package manager)
-- [Rust](https://www.rust-lang.org/tools/install) (for Tauri and overlay)
-- Tauri prerequisites: https://tauri.app/start/prerequisites/
-
-For Wayland overlay mode (Linux only):
-- GTK4
-- gtk4-layer-shell
+- [Rust](https://www.rust-lang.org/tools/install) (for overlay build)
+- Linux with Wayland compositor
+- GTK4 and gtk4-layer-shell
 
 ### Installation
 
@@ -132,14 +128,11 @@ bun install
 ### Development
 
 ```bash
-# Start web dev server + overlay (Wayland)
+# Start development (Wayland overlay)
 bun dev
 
-# Start web dev server only
+# Start web dev server only (for frontend debugging)
 bun dev:web
-
-# Run full Tauri app
-bun tauri dev
 ```
 
 ### Production Build
@@ -150,9 +143,6 @@ bun build
 
 # Build web only
 bun build:web
-
-# Build Tauri desktop app
-bun tauri build
 ```
 
 ## Configuration
@@ -165,10 +155,7 @@ Configure your LLM provider API key in the settings modal (gear icon):
 2. Enter your API key
 3. Choose a model
 
-API keys are stored locally in the application's data directory:
-- **Linux**: `~/.local/share/tauri-app/`
-- **macOS**: `~/Library/Application Support/com.desktopwaifu.app/`
-- **Windows**: `%APPDATA%\com.desktopwaifu.app\`
+API keys are stored locally in `~/.local/share/desktop-waifu/`
 
 ### Characters
 
