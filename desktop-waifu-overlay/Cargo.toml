@@ -12,7 +12,7 @@ categories = ["games"]
 readme = "../README.md"
 
 [[bin]]
-name = "desktop-waifu"
+name = "desktop-waifu-overlay"
 path = "src/main.rs"
 
 [dependencies]

@@ -18,6 +18,37 @@ A desktop companion app featuring animated 3D VRM characters with AI-powered con
 - **Streaming Chat** - Real-time responses with full markdown support
 - **Persistent Settings** - Character, personality, and API preferences saved locally
 
+## Installation
+
+### Arch Linux (AUR)
+
+```bash
+yay -S desktop-waifu
+# or
+paru -S desktop-waifu
+```
+
+### Debian/Ubuntu (.deb)
+
+Download the latest `.deb` from [GitHub Releases](https://github.com/yv-was-taken/desktop-waifu/releases):
+
+```bash
+# Download and install
+wget https://github.com/yv-was-taken/desktop-waifu/releases/latest/download/desktop-waifu_0.1.0-1_amd64.deb
+sudo dpkg -i desktop-waifu_0.1.0-1_amd64.deb
+```
+
+### macOS (Homebrew)
+
+```bash
+brew tap yv-was-taken/desktop-waifu
+brew install desktop-waifu
+```
+
+### From Source
+
+See [Getting Started](#getting-started) below.
+
 ## Tech Stack
 
 | Category | Technologies |

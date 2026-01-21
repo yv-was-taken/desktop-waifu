@@ -18,12 +18,16 @@ override_dh_auto_build:
 	# Build frontend
 	bun install --frozen-lockfile
 	bun run build:web
-	# Build Rust binary
+	# Build overlay binary
 	cargo build --release --manifest-path desktop-waifu-overlay/Cargo.toml
+	# Build Tauri launcher
+	cargo build --release --manifest-path src-tauri/Cargo.toml
 
 override_dh_auto_install:
-	# Install binary (built in desktop-waifu-overlay subdirectory)
-	install -Dm755 desktop-waifu-overlay/target/release/desktop-waifu debian/desktop-waifu/usr/bin/desktop-waifu
+	# Install Tauri launcher as main entry point
+	install -Dm755 src-tauri/target/release/desktop-waifu-tauri debian/desktop-waifu/usr/bin/desktop-waifu
+	# Install overlay binary (Tauri looks for this by name)
+	install -Dm755 desktop-waifu-overlay/target/release/desktop-waifu-overlay debian/desktop-waifu/usr/bin/desktop-waifu-overlay
 	# Install frontend assets
 	install -dm755 debian/desktop-waifu/usr/share/desktop-waifu
 	cp -r dist/* debian/desktop-waifu/usr/share/desktop-waifu/
@@ -32,4 +36,5 @@ override_dh_auto_install:
 
 override_dh_auto_clean:
 	cargo clean --manifest-path desktop-waifu-overlay/Cargo.toml || true
+	cargo clean --manifest-path src-tauri/Cargo.toml || true
 	rm -rf node_modules dist

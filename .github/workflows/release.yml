@@ -56,13 +56,19 @@ jobs:
       - name: Build frontend
         run: bun run build:web
 
-      - name: Build Linux binary
+      - name: Build overlay binary
         run: cargo build --release --manifest-path desktop-waifu-overlay/Cargo.toml
+
+      - name: Build Tauri launcher
+        run: cargo build --release --manifest-path src-tauri/Cargo.toml
 
       - name: Create tarball
         run: |
           mkdir -p release/desktop-waifu
-          cp desktop-waifu-overlay/target/release/desktop-waifu release/desktop-waifu/
+          # Tauri launcher as main entry point (renamed to desktop-waifu)
+          cp src-tauri/target/release/desktop-waifu-tauri release/desktop-waifu/desktop-waifu
+          # Overlay binary (Tauri looks for this by name)
+          cp desktop-waifu-overlay/target/release/desktop-waifu-overlay release/desktop-waifu/
           cp -r dist release/desktop-waifu/
           cp LICENSE README.md release/desktop-waifu/
           cp packaging/desktop-waifu.desktop release/desktop-waifu/
