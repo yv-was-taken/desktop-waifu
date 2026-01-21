@@ -1,6 +1,9 @@
 # Rust build artifacts
 **/target/
 
+# Nix build output
+result
+
 # Logs
 logs
 *.log

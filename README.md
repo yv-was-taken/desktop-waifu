@@ -45,6 +45,20 @@ brew tap yv-was-taken/desktop-waifu
 brew install desktop-waifu
 ```
 
+### NixOS / Nix
+
+```bash
+# Run directly without installing
+nix run github:yv-was-taken/desktop-waifu
+
+# Install to user profile
+nix profile install github:yv-was-taken/desktop-waifu
+
+# Or add to your NixOS configuration (flake-based):
+# inputs.desktop-waifu.url = "github:yv-was-taken/desktop-waifu";
+# environment.systemPackages = [ inputs.desktop-waifu.packages.${system}.default ];
+```
+
 ### From Source
 
 See [Getting Started](#getting-started) below.
