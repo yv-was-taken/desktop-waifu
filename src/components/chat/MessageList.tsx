@@ -198,7 +198,7 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
             className={`group flex items-end gap-1 ${isUser ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[85%] relative px-4 py-3 ${
+              className={`${hasHtmlContent && !isUser ? 'w-[85%]' : 'max-w-[85%]'} relative px-4 py-3 ${
                 isUser
                   ? 'bg-slate-800 text-white border-2 border-slate-600 [clip-path:polygon(0_0,100%_0,100%_calc(100%-8px),calc(100%-8px)_100%,0_100%)]'
                   : 'bg-[#111111] text-white border-2 border-slate-600 [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%,0_8px)]'
