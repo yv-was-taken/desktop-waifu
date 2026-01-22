@@ -166,7 +166,23 @@ API keys are stored locally in `~/.local/share/desktop-waifu/`
 
 6 characters are available, each with the same animation set but unique appearances:
 
-Emily, Grace, Jessica, Rose, Sam, Victoria
+#### Emily
+![Emily](docs/characters/emily.png)
+
+#### Grace
+![Grace](docs/characters/grace.png)
+
+#### Jessica
+![Jessica](docs/characters/jessica.png)
+
+#### Rose
+![Rose](docs/characters/rose.png)
+
+#### Sam
+![Sam](docs/characters/sam.png)
+
+#### Victoria
+![Victoria](docs/characters/victoria.png)
 
 ### Personalities
 
