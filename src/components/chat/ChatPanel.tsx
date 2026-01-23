@@ -7,6 +7,8 @@ import { getProvider } from '../../lib/llm';
 import { buildSystemPrompt } from '../../lib/personalities';
 import { executeCommand as platformExecuteCommand, getSystemInfo } from '../../lib/platform';
 import { debugLog } from '../../lib/debug';
+import { isSlashCommand, executeSlashCommand } from '../../lib/commands';
+import { characters } from '../../characters';
 import AnsiToHtml from 'ansi-to-html';
 import type { LLMMessage, SystemInfo } from '../../types';
 
@@ -120,6 +122,27 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   }, []);
 
   const handleSend = useCallback(async (content: string) => {
+    // Handle slash commands before anything else
+    if (isSlashCommand(content)) {
+      const result = executeSlashCommand(content, {
+        clearMessages,
+        toggleSettings,
+        updateSettings: (s) => useAppStore.getState().updateSettings(s),
+        addMessage: (msg) => addMessage(msg),
+        availableCharacters: Object.keys(characters),
+        currentCharacter: settings.selectedCharacter,
+      });
+
+      if (result?.handled) {
+        if (result.error) {
+          addMessage({ role: 'assistant', content: `**Error:** ${result.error}` });
+        } else if (result.feedbackMessage) {
+          addMessage({ role: 'assistant', content: result.feedbackMessage });
+        }
+        return; // Don't send to LLM
+      }
+    }
+
     if (!settings.apiKey) {
       // This shouldn't happen since input is disabled without API key
       return;

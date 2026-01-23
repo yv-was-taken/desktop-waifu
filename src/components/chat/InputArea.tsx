@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAppStore } from '../../store';
+import { CommandSuggestions, getFilteredCommands } from './CommandSuggestions';
 
 interface InputAreaProps {
   onSend: (message: string) => void;
@@ -8,12 +9,36 @@ interface InputAreaProps {
 
 export function InputArea({ onSend, disabled }: InputAreaProps) {
   const [input, setInput] = useState('');
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevExecutionStatusRef = useRef<string | null>(null);
 
   const setUserTyping = useAppStore((state) => state.setUserTyping);
   const executionStatus = useAppStore((state) => state.execution.status);
+
+  // Determine if we should show command suggestions
+  const showSuggestions = useMemo(() => {
+    const trimmed = input.trimStart();
+    return trimmed.startsWith('/') && !trimmed.includes(' ');
+  }, [input]);
+
+  // Extract the filter text (everything after `/`)
+  const commandFilter = useMemo(() => {
+    if (!showSuggestions) return '';
+    return input.trimStart().slice(1);
+  }, [input, showSuggestions]);
+
+  // Reset selected index when filter changes
+  useEffect(() => {
+    setSelectedCommandIndex(0);
+  }, [commandFilter]);
+
+  // Handle selecting a command from suggestions
+  const handleSelectCommand = useCallback((commandName: string) => {
+    setInput(`/${commandName} `);
+    textareaRef.current?.focus();
+  }, []);
 
   // Handle typing state with debounce
   const handleInputChange = useCallback((value: string) => {
@@ -59,11 +84,46 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
   }, [input, disabled, onSend, setUserTyping]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Handle command suggestion navigation
+    if (showSuggestions) {
+      const suggestions = getFilteredCommands(commandFilter);
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedCommandIndex((prev) =>
+          prev < suggestions.length - 1 ? prev + 1 : prev
+        );
+        return;
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedCommandIndex((prev) => (prev > 0 ? prev - 1 : 0));
+        return;
+      }
+
+      // Tab autocompletes the selected command
+      if (e.key === 'Tab' && suggestions.length > 0) {
+        e.preventDefault();
+        const selected = suggestions[selectedCommandIndex];
+        if (selected) {
+          handleSelectCommand(selected.name);
+        }
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setInput('');
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
-  }, [handleSubmit]);
+  }, [handleSubmit, showSuggestions, commandFilter, selectedCommandIndex, handleSelectCommand]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -115,6 +175,14 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
     <div className="p-3 bg-black">
       <div className="flex items-end gap-2">
         <div className="flex-1 relative">
+          {showSuggestions && (
+            <CommandSuggestions
+              filter={commandFilter}
+              onSelect={handleSelectCommand}
+              selectedIndex={selectedCommandIndex}
+              onSelectedIndexChange={setSelectedCommandIndex}
+            />
+          )}
           <textarea
             ref={textareaRef}
             value={input}
