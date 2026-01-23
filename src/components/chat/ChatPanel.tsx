@@ -23,6 +23,8 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   const isThinking = useAppStore((state) => state.chat.isThinking);
   const settings = useAppStore((state) => state.settings);
   const addMessage = useAppStore((state) => state.addMessage);
+  const addStreamingMessage = useAppStore((state) => state.addStreamingMessage);
+  const updateMessageContent = useAppStore((state) => state.updateMessageContent);
   const setThinking = useAppStore((state) => state.setThinking);
   const setExpression = useAppStore((state) => state.setExpression);
   const toggleSettings = useAppStore((state) => state.toggleSettings);
@@ -156,35 +158,72 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       debugLog(`[LLM] System prompt length: ${llmMessages[0]?.content?.length || 0}`);
       debugLog(`[LLM] System prompt includes EXECUTE instruction: ${llmMessages[0]?.content?.includes('[EXECUTE:') || false}`);
 
-      const response = await provider.chat(llmMessages, {
+      const config = {
         apiKey: settings.apiKey,
         model: settings.llmModel,
         maxTokens: 4096,
         temperature: 0.8,
-      });
+      };
 
-      // Done thinking
-      setThinking(false);
+      let response: string;
 
-      debugLog(`[LLM] Response received, length=${response.length}`);
-      debugLog(`[LLM] Response preview: ${response.substring(0, 200)}`);
+      // Use streaming if available
+      if (provider.streamChat) {
+        // Create placeholder message and get its ID for streaming updates
+        const messageId = addStreamingMessage();
 
-      // Check for EXECUTE tag in response
-      const executeResult = parseExecuteTag(response);
-      debugLog(`[LLM] parseExecuteTag result: ${executeResult ? `command="${executeResult.command}"` : 'null'}`);
+        // Stop showing thinking indicator since content is now appearing
+        setThinking(false);
 
-      if (executeResult) {
-        debugLog(`[LLM] EXECUTE tag found, calling setGeneratedCommand`);
-        // Only add message if there's surrounding text; otherwise CommandApproval provides context
-        if (executeResult.cleanResponse) {
-          addMessage({ role: 'assistant', content: executeResult.cleanResponse });
+        let fullResponse = '';
+        for await (const chunk of provider.streamChat(llmMessages, config)) {
+          fullResponse += chunk;
+          updateMessageContent(messageId, fullResponse);
         }
-        // Trigger command approval flow - CommandApproval component shows the command
-        setGeneratedCommand(content, executeResult.command);
-        debugLog(`[LLM] setGeneratedCommand called, current status=${useAppStore.getState().execution.status}`);
+        response = fullResponse;
+
+        debugLog(`[LLM] Streaming complete, length=${response.length}`);
+        debugLog(`[LLM] Response preview: ${response.substring(0, 200)}`);
+
+        // Check for EXECUTE tag in response
+        const executeResult = parseExecuteTag(response);
+        debugLog(`[LLM] parseExecuteTag result: ${executeResult ? `command="${executeResult.command}"` : 'null'}`);
+
+        if (executeResult) {
+          debugLog(`[LLM] EXECUTE tag found, calling setGeneratedCommand`);
+          // Update the message to show clean response (without EXECUTE tag)
+          updateMessageContent(messageId, executeResult.cleanResponse);
+          // Trigger command approval flow
+          setGeneratedCommand(content, executeResult.command);
+          debugLog(`[LLM] setGeneratedCommand called, current status=${useAppStore.getState().execution.status}`);
+        }
       } else {
-        debugLog(`[LLM] No EXECUTE tag, adding as regular message`);
-        addMessage({ role: 'assistant', content: response });
+        // Fallback to non-streaming
+        response = await provider.chat(llmMessages, config);
+
+        // Done thinking
+        setThinking(false);
+
+        debugLog(`[LLM] Response received, length=${response.length}`);
+        debugLog(`[LLM] Response preview: ${response.substring(0, 200)}`);
+
+        // Check for EXECUTE tag in response
+        const executeResult = parseExecuteTag(response);
+        debugLog(`[LLM] parseExecuteTag result: ${executeResult ? `command="${executeResult.command}"` : 'null'}`);
+
+        if (executeResult) {
+          debugLog(`[LLM] EXECUTE tag found, calling setGeneratedCommand`);
+          // Only add message if there's surrounding text; otherwise CommandApproval provides context
+          if (executeResult.cleanResponse) {
+            addMessage({ role: 'assistant', content: executeResult.cleanResponse });
+          }
+          // Trigger command approval flow - CommandApproval component shows the command
+          setGeneratedCommand(content, executeResult.command);
+          debugLog(`[LLM] setGeneratedCommand called, current status=${useAppStore.getState().execution.status}`);
+        } else {
+          debugLog(`[LLM] No EXECUTE tag, adding as regular message`);
+          addMessage({ role: 'assistant', content: response });
+        }
       }
 
       setExpression('neutral');
@@ -199,7 +238,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       });
       setExpression('sad');
     }
-  }, [settings, messages, addMessage, setThinking, setExpression, systemInfo, parseExecuteTag, setGeneratedCommand]);
+  }, [settings, messages, addMessage, addStreamingMessage, updateMessageContent, setThinking, setExpression, systemInfo, parseExecuteTag, setGeneratedCommand]);
 
   return (
     <div className="w-full h-full flex flex-col bg-slate-900/90 border border-slate-600">
