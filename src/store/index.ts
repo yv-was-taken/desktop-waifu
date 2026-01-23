@@ -69,6 +69,8 @@ interface AppState {
   setThinking: (thinking: boolean) => void;
   setUserTyping: (typing: boolean) => void;
   clearMessages: () => void;
+  updateMessage: (id: string, content: string) => void;
+  truncateMessagesAfter: (id: string) => void;
 
   // Settings
   settings: SettingsState;
@@ -157,6 +159,28 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           chat: { ...state.chat, messages: [] },
         })),
+
+      updateMessage: (id, content) =>
+        set((state) => ({
+          chat: {
+            ...state.chat,
+            messages: state.chat.messages.map((msg) =>
+              msg.id === id ? { ...msg, content } : msg
+            ),
+          },
+        })),
+
+      truncateMessagesAfter: (id) =>
+        set((state) => {
+          const index = state.chat.messages.findIndex((msg) => msg.id === id);
+          if (index === -1) return state;
+          return {
+            chat: {
+              ...state.chat,
+              messages: state.chat.messages.slice(0, index + 1),
+            },
+          };
+        }),
 
       // Settings state
       settings: {

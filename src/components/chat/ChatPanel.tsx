@@ -27,6 +27,8 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   const setExpression = useAppStore((state) => state.setExpression);
   const toggleSettings = useAppStore((state) => state.toggleSettings);
   const clearMessages = useAppStore((state) => state.clearMessages);
+  const updateMessage = useAppStore((state) => state.updateMessage);
+  const truncateMessagesAfter = useAppStore((state) => state.truncateMessagesAfter);
 
   // System info for command execution context
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
@@ -118,6 +120,77 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     }
     return null;
   }, []);
+
+  const handleEditAndRetry = useCallback(async (messageId: string, newContent: string) => {
+    if (!settings.apiKey) return;
+
+    // Update the message content and truncate subsequent messages
+    updateMessage(messageId, newContent);
+    truncateMessagesAfter(messageId);
+
+    // Start thinking animation while waiting for LLM
+    setThinking(true);
+
+    try {
+      const provider = getProvider(settings.llmProvider);
+
+      // Build system prompt from personality settings with system info
+      const systemPrompt = buildSystemPrompt({
+        selectedPersonality: settings.selectedPersonality,
+        detailLevel: settings.detailLevel,
+        assistantSubject: settings.assistantSubject,
+        customSubject: settings.customSubject,
+      }, systemInfo);
+
+      // Get fresh messages from store (after truncation)
+      const currentMessages = useAppStore.getState().chat.messages;
+
+      // Build messages array with system prompt
+      const llmMessages: LLMMessage[] = [
+        { role: 'system', content: systemPrompt },
+        ...currentMessages.map((m) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })),
+      ];
+
+      debugLog(`[LLM] Edit & Retry: Sending ${llmMessages.length} messages to ${settings.llmProvider}/${settings.llmModel}`);
+
+      const response = await provider.chat(llmMessages, {
+        apiKey: settings.apiKey,
+        model: settings.llmModel,
+        maxTokens: 4096,
+        temperature: 0.8,
+      });
+
+      // Done thinking
+      setThinking(false);
+
+      // Check for EXECUTE tag in response
+      const executeResult = parseExecuteTag(response);
+
+      if (executeResult) {
+        if (executeResult.cleanResponse) {
+          addMessage({ role: 'assistant', content: executeResult.cleanResponse });
+        }
+        setGeneratedCommand(newContent, executeResult.command);
+      } else {
+        addMessage({ role: 'assistant', content: response });
+      }
+
+      setExpression('neutral');
+
+    } catch (error) {
+      console.error('LLM Error:', error);
+      setThinking(false);
+
+      addMessage({
+        role: 'assistant',
+        content: `Ah, something went wrong! ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+      setExpression('sad');
+    }
+  }, [settings, systemInfo, parseExecuteTag, setGeneratedCommand, addMessage, setThinking, setExpression, updateMessage, truncateMessagesAfter]);
 
   const handleSend = useCallback(async (content: string) => {
     if (!settings.apiKey) {
@@ -246,7 +319,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       </div>
 
       {/* Messages */}
-      <MessageList messages={messages} isTyping={isThinking} />
+      <MessageList messages={messages} isTyping={isThinking} onEditAndRetry={handleEditAndRetry} />
 
       {/* Command Approval */}
       <CommandApproval />
