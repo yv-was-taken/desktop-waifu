@@ -155,7 +155,6 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
   // Auto-scroll to bottom when messages change, unless user scrolled up
   useEffect(() => {
     if (!scrollRef.current || userScrolledUp.current) return;
-    // Use instant scroll during streaming to keep up
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isTyping]);
 

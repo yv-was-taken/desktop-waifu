@@ -175,10 +175,31 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         // Stop showing thinking indicator since content is now appearing
         setThinking(false);
 
+        // Typewriter effect: buffer incoming tokens and reveal character by character
         let fullResponse = '';
+        let displayedLength = 0;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+        const animateTyping = () => {
+          if (displayedLength < fullResponse.length) {
+            // Reveal 1 character every 5ms (~200 chars/sec)
+            displayedLength += 1;
+            updateMessageContent(messageId, fullResponse.slice(0, displayedLength));
+            timeoutId = setTimeout(animateTyping, 5);
+          }
+        };
+
         for await (const chunk of provider.streamChat(llmMessages, config)) {
           fullResponse += chunk;
-          updateMessageContent(messageId, fullResponse);
+          // Start animation if not already running
+          if (timeoutId === null) {
+            animateTyping();
+          }
+        }
+
+        // Wait for animation to finish typing everything
+        while (displayedLength < fullResponse.length) {
+          await new Promise(resolve => setTimeout(resolve, 5));
         }
         response = fullResponse;
 

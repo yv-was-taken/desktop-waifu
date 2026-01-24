@@ -23,10 +23,6 @@ html, body, #root {
 }
 
 /* Custom scrollbar for chat */
-.chat-scroll {
-  scroll-behavior: smooth;
-}
-
 .chat-scroll::-webkit-scrollbar {
   width: 6px;
 }
