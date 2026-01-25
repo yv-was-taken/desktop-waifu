@@ -106,7 +106,7 @@ let
 in
 rustPlatform.buildRustPackage {
   pname = "desktop-waifu";
-  version = "0.2.1";
+  version = "0.2.2";
 
   inherit src;
 

@@ -1,3 +1,9 @@
+desktop-waifu (0.2.2-1) unstable; urgency=medium
+
+  * Auto-focus text input when showing overlay via hotkey (Super+M)
+
+ -- yv-was-taken <yvmail@proton.me>  Sun, 25 Jan 2026 01:28:36 -0600
+
 desktop-waifu (0.2.1-1) unstable; urgency=medium
 
   * Bug fixes:

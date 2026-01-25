@@ -139,6 +139,10 @@ function OverlayMode() {
       setHiding(false);
       // Open chat panel and focus input
       setChatPanelOpen(true);
+      // Dispatch focus event after a small delay to ensure panel is rendered
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('hotkeyFocus'));
+      }, 50);
     };
 
     debugLog(`[HOTKEY] Registering hotkeyShow listener, hotkeyEnabled=${hotkeyEnabled}`);

@@ -241,7 +241,7 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
     }
   }, [executionStatus]);
 
-  // Auto-focus textarea when window gains focus
+  // Auto-focus textarea when window gains focus or hotkey shows overlay
   useEffect(() => {
     const handleWindowFocus = () => {
       if (textareaRef.current && !disabled) {
@@ -250,12 +250,14 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
     };
 
     window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('hotkeyFocus', handleWindowFocus);
 
     // Also focus on initial mount
     handleWindowFocus();
 
     return () => {
       window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('hotkeyFocus', handleWindowFocus);
     };
   }, [disabled]);
 
