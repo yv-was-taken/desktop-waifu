@@ -42,6 +42,9 @@ clap = { version = "4", features = ["derive"] }
 # System tray (StatusNotifierItem protocol)
 ksni = "0.2"
 
+# Desktop notifications (cross-platform: Linux, macOS, Windows)
+notify-rust = "4"
+
 # Static file server for production mode
 axum = "0.8"
 tower-http = { version = "0.6", features = ["fs"] }

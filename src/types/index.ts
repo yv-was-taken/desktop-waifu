@@ -152,3 +152,6 @@ export interface SystemInfo {
   shell: string | null;
   package_manager: string | null;
 }
+
+// Notification Types
+export type NotificationPreference = 'off' | 'unfocused' | 'chat_closed';

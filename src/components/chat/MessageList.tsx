@@ -357,6 +357,7 @@ export function MessageList({ messages, isTyping, onEditAndRetry }: MessageListP
                     </ReactMarkdown>
                   )}
                 </div>
+                </>
               )}
             </div>
 

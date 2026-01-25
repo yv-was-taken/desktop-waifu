@@ -9,6 +9,7 @@ import type {
   ExecutionStatus,
   CommandOutput,
   CodeExecutionState,
+  NotificationPreference,
 } from '../types';
 
 interface CharacterState {
@@ -42,6 +43,8 @@ interface SettingsState {
   detailLevel: DetailLevel;
   assistantSubject: string;
   customSubject: string;
+  // Notification settings
+  notificationPreference: NotificationPreference;
   // Export settings
   exportPath: string;
 }
@@ -232,6 +235,8 @@ export const useAppStore = create<AppState>()(
         detailLevel: 'balanced',
         assistantSubject: 'programming',
         customSubject: '',
+        // Notification defaults
+        notificationPreference: 'chat_closed',
         // Export settings
         exportPath: '~/Documents/DesktopWaifu',
       },
@@ -365,6 +370,7 @@ export const useAppStore = create<AppState>()(
           assistantSubject: state.settings.assistantSubject,
           customSubject: state.settings.customSubject,
           showSettings: state.settings.showSettings,
+          notificationPreference: state.settings.notificationPreference,
           exportPath: state.settings.exportPath,
         },
         ui: {
