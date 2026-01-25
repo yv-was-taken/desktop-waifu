@@ -139,10 +139,11 @@ function OverlayMode() {
       setHiding(false);
       // Open chat panel and focus input
       setChatPanelOpen(true);
-      // Dispatch focus event after a small delay to ensure panel is rendered
+      // Dispatch focus event after delay to ensure panel is rendered
       setTimeout(() => {
+        requestKeyboardFocus();
         window.dispatchEvent(new CustomEvent('hotkeyFocus'));
-      }, 50);
+      }, 150);
     };
 
     debugLog(`[HOTKEY] Registering hotkeyShow listener, hotkeyEnabled=${hotkeyEnabled}`);
@@ -353,14 +354,21 @@ function OverlayMode() {
   // Focus textarea when chat panel opens
   useEffect(() => {
     if (chatPanelOpen) {
-      // Small delay to ensure DOM is ready
+      // Delay to ensure DOM is ready and keyboard mode is set
       setTimeout(() => {
         requestKeyboardFocus();
-        const textarea = document.querySelector('textarea');
-        if (textarea) {
-          (textarea as HTMLTextAreaElement).focus();
-        }
-      }, 50);
+        // Try focusing multiple times to handle race conditions with compositor
+        const focusTextarea = () => {
+          const textarea = document.querySelector('textarea');
+          if (textarea) {
+            (textarea as HTMLTextAreaElement).focus();
+          }
+        };
+        focusTextarea();
+        // Retry after keyboard focus is likely granted
+        setTimeout(focusTextarea, 100);
+        setTimeout(focusTextarea, 200);
+      }, 100);
     }
   }, [chatPanelOpen]);
 

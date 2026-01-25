@@ -391,14 +391,24 @@ fn build_ui(app: &Application, webview_url: &str) {
                         debug_log!("[IPC] Showing window and dispatching hotkeyShow event");
                         window_for_ipc.present();
                         *is_visible_for_ipc.borrow_mut() = true;
-                        // Dispatch hotkeyShow - opens chat + focuses input
-                        webview_for_ipc.evaluate_javascript(
-                            "window.dispatchEvent(new CustomEvent('hotkeyShow'))",
-                            None,
-                            None,
-                            None::<&gio::Cancellable>,
-                            |_| {},
-                        );
+                        // Set Exclusive to grab keyboard from compositor (user didn't click, so
+                        // Wayland won't grant focus otherwise). The is_active_notify handler
+                        // will switch back to OnDemand when user clicks elsewhere.
+                        window_for_ipc.set_keyboard_mode(KeyboardMode::Exclusive);
+                        webview_for_ipc.grab_focus();
+
+                        // Dispatch hotkeyShow after short delay to let Exclusive mode take effect
+                        let webview_for_hotkey = webview_for_ipc.clone();
+                        glib::timeout_add_local_once(Duration::from_millis(50), move || {
+                            webview_for_hotkey.evaluate_javascript(
+                                "window.dispatchEvent(new CustomEvent('hotkeyShow'))",
+                                None,
+                                None,
+                                None::<&gio::Cancellable>,
+                                |_| {},
+                            );
+                        });
+
                         if let Some(ref h) = tray_handle_for_ipc {
                             update_tray_visibility(h, true);
                         }
