@@ -176,7 +176,7 @@ Phase 5 (depends on stable base)
 
 When implementing a feature:
 1. Check the dependency graph for prerequisites
-2. Create a feature branch from `master`
+2. Create a feature branch from `development`
 3. Update relevant checkboxes in this document
 4. Reference the listed files as starting points
 5. Follow patterns established in CLAUDE.md
