@@ -5,7 +5,7 @@ mod tray;
 use clap::Parser;
 
 // Debug logging flag - set to true to enable debug output to terminal
-const DEBUG_LOGGING: bool = false;
+const DEBUG_LOGGING: bool = true;
 
 /// Desktop Waifu overlay - Animated 3D VRM characters for your desktop
 #[derive(Parser)]
@@ -107,8 +107,17 @@ fn main() -> Result<()> {
 
     // Handle CLI commands (client mode) - send to running instance and exit
     if cli.toggle {
-        return ipc::send_command("toggle")
-            .map_err(|e| anyhow::anyhow!("Failed to send toggle: {}. Is desktop-waifu running?", e));
+        eprintln!("[CLI] Sending toggle command via IPC socket...");
+        match ipc::send_command("toggle") {
+            Ok(()) => {
+                eprintln!("[CLI] Toggle command sent successfully");
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("[CLI] Failed to send toggle: {}", e);
+                return Err(anyhow::anyhow!("Failed to send toggle: {}. Is desktop-waifu running?", e));
+            }
+        }
     }
     if cli.show {
         return ipc::send_command("show")
@@ -265,8 +274,11 @@ fn build_ui(app: &Application, webview_url: &str) {
         }
     };
 
+    // Track visibility state (shared between tray, IPC, and windowControl handlers)
+    let is_visible = Rc::new(RefCell::new(true));
+
     // Create WebView with message handler for drag events and window control
-    let webview = create_webview_with_handlers(&window, position, drag_state, quadrant, tray_handle.clone());
+    let webview = create_webview_with_handlers(&window, position, drag_state, quadrant, tray_handle.clone(), is_visible.clone());
 
     // Add WebView to window
     window.set_child(Some(&webview));
@@ -280,9 +292,6 @@ fn build_ui(app: &Application, webview_url: &str) {
         debug_log!("[FOCUS] Keyboard focus requested, grabbing focus");
         webview_for_focus.grab_focus();
     });
-
-    // Track visibility state (shared between tray and IPC handlers)
-    let is_visible = Rc::new(RefCell::new(true));
 
     // Track hotkey enabled state (controlled by frontend settings)
     let hotkey_enabled = Rc::new(RefCell::new(false));
@@ -353,8 +362,12 @@ fn build_ui(app: &Application, webview_url: &str) {
 
     glib::timeout_add_local(Duration::from_millis(50), move || {
         while let Ok(cmd) = ipc_receiver.try_recv() {
+            debug_log!("[IPC] Received command from socket: '{}'", cmd);
+
             // Check if hotkey is enabled before processing commands
-            if !*hotkey_enabled_for_ipc.borrow() {
+            let hotkey_state = *hotkey_enabled_for_ipc.borrow();
+            debug_log!("[IPC] Hotkey enabled state: {}", hotkey_state);
+            if !hotkey_state {
                 debug_log!("[IPC] Hotkey disabled, ignoring command: {}", cmd);
                 continue;
             }
@@ -362,13 +375,20 @@ fn build_ui(app: &Application, webview_url: &str) {
             match cmd.as_str() {
                 "toggle" => {
                     let visible = *is_visible_for_ipc.borrow();
+                    debug_log!("[IPC] Toggle command - current visibility: {}", visible);
                     if visible {
-                        window_for_ipc.hide();
-                        *is_visible_for_ipc.borrow_mut() = false;
-                        if let Some(ref h) = tray_handle_for_ipc {
-                            update_tray_visibility(h, false);
-                        }
+                        debug_log!("[IPC] Dispatching hotkeyHide event to frontend");
+                        // Dispatch hotkeyHide to frontend - triggers animation, then frontend tells us to hide
+                        webview_for_ipc.evaluate_javascript(
+                            "window.dispatchEvent(new CustomEvent('hotkeyHide'))",
+                            None,
+                            None,
+                            None::<&gio::Cancellable>,
+                            |_| {},
+                        );
+                        // Note: is_visible will be set to false when frontend sends windowControl hide
                     } else {
+                        debug_log!("[IPC] Showing window and dispatching hotkeyShow event");
                         window_for_ipc.present();
                         *is_visible_for_ipc.borrow_mut() = true;
                         // Dispatch hotkeyShow - opens chat + focuses input
@@ -402,11 +422,14 @@ fn build_ui(app: &Application, webview_url: &str) {
                 }
                 "hide" => {
                     if *is_visible_for_ipc.borrow() {
-                        window_for_ipc.hide();
-                        *is_visible_for_ipc.borrow_mut() = false;
-                        if let Some(ref h) = tray_handle_for_ipc {
-                            update_tray_visibility(h, false);
-                        }
+                        // Dispatch hotkeyHide to frontend - triggers animation
+                        webview_for_ipc.evaluate_javascript(
+                            "window.dispatchEvent(new CustomEvent('hotkeyHide'))",
+                            None,
+                            None,
+                            None::<&gio::Cancellable>,
+                            |_| {},
+                        );
                     }
                 }
                 _ => {}
@@ -439,6 +462,7 @@ fn create_webview_with_handlers(
     drag_state: Rc<RefCell<DragState>>,
     quadrant: Rc<RefCell<Quadrant>>,
     tray_handle: Option<ksni::Handle<tray::DesktopWaifuTray>>,
+    is_visible: Rc<RefCell<bool>>,
 ) -> WebView {
     // Set up persistent storage for localStorage/cookies
     // This ensures API keys and settings are preserved across sessions
@@ -506,6 +530,7 @@ fn create_webview_with_handlers(
 
     // Clone window for windowControl handler
     let window_for_control = window.clone();
+    let is_visible_for_control = is_visible.clone();
 
     // Connect to the script-message-received signal for window control (hide/show)
     content_manager.connect_script_message_received(Some("windowControl"), move |_manager, js_value| {
@@ -515,18 +540,23 @@ fn create_webview_with_handlers(
 
                 match action {
                     "hide" => {
-                        // Wait for the hide animation to complete (800ms), then hide window
+                        debug_log!("[WINDOW_CONTROL] Hide requested");
                         let win = window_for_control.clone();
                         let handle = tray_handle.clone();
-                        glib::timeout_add_local_once(Duration::from_millis(800), move || {
-                            win.hide();
-                            if let Some(ref h) = handle {
-                                update_tray_visibility(h, false);
-                            }
-                        });
+                        let is_vis = is_visible_for_control.clone();
+                        // Hide window immediately (animation already completed in frontend)
+                        win.hide();
+                        *is_vis.borrow_mut() = false;
+                        debug_log!("[WINDOW_CONTROL] Window hidden, is_visible set to false");
+                        if let Some(ref h) = handle {
+                            update_tray_visibility(h, false);
+                        }
                     }
                     "show" => {
+                        debug_log!("[WINDOW_CONTROL] Show requested");
                         window_for_control.present();
+                        *is_visible_for_control.borrow_mut() = true;
+                        debug_log!("[WINDOW_CONTROL] Window shown, is_visible set to true");
                         if let Some(ref handle) = tray_handle {
                             update_tray_visibility(handle, true);
                         }
