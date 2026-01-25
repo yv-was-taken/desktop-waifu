@@ -162,6 +162,59 @@ Configure your LLM provider API key in the settings modal (gear icon):
 
 API keys are stored locally in `~/.local/share/desktop-waifu/`
 
+### Global Hotkey
+
+Desktop Waifu supports a global hotkey to toggle the overlay visibility. When triggered, it shows the overlay with the chat panel open and input focused.
+
+#### Option 1: Automatic Setup (Recommended)
+
+Enable the "Global Hotkey" toggle in Settings. The app will:
+1. Detect your compositor
+2. Automatically append a `Super+M` keybinding to your compositor config
+3. Reload the config (where supported)
+
+**Supported Compositors:**
+
+| Compositor | Config File | Keybinding Added |
+|------------|-------------|------------------|
+| Sway | `~/.config/sway/config` | `bindsym $mod+m exec desktop-waifu-overlay --toggle` |
+| Hyprland | `~/.config/hypr/hyprland.conf` | `bind = SUPER, M, exec, desktop-waifu-overlay --toggle` |
+| i3 | `~/.config/i3/config` | `bindsym $mod+m exec desktop-waifu-overlay --toggle` |
+| KDE Plasma | `kglobalshortcutsrc` | `Meta+M` via kwriteconfig5 |
+| GNOME | gsettings | `<Super>m` via gsettings |
+| River | `~/.config/river/init` | `riverctl map normal Super M spawn "desktop-waifu-overlay --toggle"` |
+| Wayfire | `~/.config/wayfire.ini` | `binding_desktop_waifu = <super> KEY_M` |
+
+**Disabling:** Turning off the toggle in Settings performs a "soft disable" - the app stops responding to the hotkey, but the keybinding remains in your compositor config. To fully remove it, manually edit your config file and delete the `desktop-waifu` line.
+
+#### Option 2: Manual Setup
+
+If you prefer to configure the keybinding yourself, or your compositor isn't supported, add a keybinding that executes:
+
+```bash
+desktop-waifu-overlay --toggle
+```
+
+You can bind this to any key combination you prefer. Example configs:
+
+```bash
+# Sway/i3 (~/.config/sway/config or ~/.config/i3/config)
+bindsym $mod+m exec desktop-waifu-overlay --toggle
+
+# Hyprland (~/.config/hypr/hyprland.conf)
+bind = SUPER, M, exec, desktop-waifu-overlay --toggle
+
+# River (~/.config/river/init)
+riverctl map normal Super M spawn "desktop-waifu-overlay --toggle"
+```
+
+**Available CLI commands:**
+- `--toggle` - Toggle overlay visibility (show if hidden, hide if visible)
+- `--show` - Show the overlay
+- `--hide` - Hide the overlay
+
+> **Important:** If you set up the keybinding manually, the "Global Hotkey" toggle in Settings will not reflect your configuration. The toggle only tracks bindings created through the automatic setup. Your manual keybinding will still work regardless of the toggle state, but you should leave the toggle **enabled** so the app responds to the hotkey commands.
+
 ### Characters
 
 6 characters are available, each with the same animation set but unique appearances:

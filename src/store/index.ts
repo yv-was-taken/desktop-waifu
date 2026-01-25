@@ -30,6 +30,7 @@ interface SettingsState {
   llmModel: string;
   apiKey: string;
   alwaysOnTop: boolean;
+  hotkeyEnabled: boolean;
   characterScale: number;
   chatScale: number;
   fontSize: number;
@@ -41,6 +42,8 @@ interface SettingsState {
   detailLevel: DetailLevel;
   assistantSubject: string;
   customSubject: string;
+  // Export settings
+  exportPath: string;
 }
 
 interface UIState {
@@ -66,9 +69,13 @@ interface AppState {
   // Chat
   chat: ChatState;
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
+  addStreamingMessage: () => string; // Returns the message id for streaming updates
+  updateMessageContent: (id: string, content: string) => void;
   setThinking: (thinking: boolean) => void;
   setUserTyping: (typing: boolean) => void;
   clearMessages: () => void;
+  updateMessage: (id: string, content: string) => void;
+  truncateMessagesAfter: (id: string) => void;
 
   // Settings
   settings: SettingsState;
@@ -145,6 +152,33 @@ export const useAppStore = create<AppState>()(
             ],
           },
         })),
+      addStreamingMessage: () => {
+        const id = crypto.randomUUID();
+        set((state) => ({
+          chat: {
+            ...state.chat,
+            messages: [
+              ...state.chat.messages,
+              {
+                id,
+                role: 'assistant' as const,
+                content: '',
+                timestamp: Date.now(),
+              },
+            ],
+          },
+        }));
+        return id;
+      },
+      updateMessageContent: (id, content) =>
+        set((state) => ({
+          chat: {
+            ...state.chat,
+            messages: state.chat.messages.map((m) =>
+              m.id === id ? { ...m, content } : m
+            ),
+          },
+        })),
       setThinking: (thinking) =>
         set((state) => ({
           chat: { ...state.chat, isThinking: thinking },
@@ -158,12 +192,35 @@ export const useAppStore = create<AppState>()(
           chat: { ...state.chat, messages: [] },
         })),
 
+      updateMessage: (id, content) =>
+        set((state) => ({
+          chat: {
+            ...state.chat,
+            messages: state.chat.messages.map((msg) =>
+              msg.id === id ? { ...msg, content } : msg
+            ),
+          },
+        })),
+
+      truncateMessagesAfter: (id) =>
+        set((state) => {
+          const index = state.chat.messages.findIndex((msg) => msg.id === id);
+          if (index === -1) return state;
+          return {
+            chat: {
+              ...state.chat,
+              messages: state.chat.messages.slice(0, index + 1),
+            },
+          };
+        }),
+
       // Settings state
       settings: {
         llmProvider: 'openai',
         llmModel: 'gpt-4o-mini',
         apiKey: '',
         alwaysOnTop: true,
+        hotkeyEnabled: false,
         characterScale: 1.0,
         chatScale: 1.0,
         fontSize: 14,
@@ -175,6 +232,8 @@ export const useAppStore = create<AppState>()(
         detailLevel: 'balanced',
         assistantSubject: 'programming',
         customSubject: '',
+        // Export settings
+        exportPath: '~/Documents/DesktopWaifu',
       },
       updateSettings: (newSettings) =>
         set((state) => ({
@@ -296,6 +355,7 @@ export const useAppStore = create<AppState>()(
           llmModel: state.settings.llmModel,
           apiKey: state.settings.apiKey,
           alwaysOnTop: state.settings.alwaysOnTop,
+          hotkeyEnabled: state.settings.hotkeyEnabled,
           characterScale: state.settings.characterScale,
           chatScale: state.settings.chatScale,
           fontSize: state.settings.fontSize,
@@ -305,6 +365,7 @@ export const useAppStore = create<AppState>()(
           assistantSubject: state.settings.assistantSubject,
           customSubject: state.settings.customSubject,
           showSettings: state.settings.showSettings,
+          exportPath: state.settings.exportPath,
         },
         ui: {
           chatPanelOpen: state.ui.chatPanelOpen,
@@ -312,6 +373,7 @@ export const useAppStore = create<AppState>()(
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<AppState>;
+        debugLog(`[STORE] Merging persisted state. Has settings: ${!!persisted.settings}, Has apiKey: ${!!persisted.settings?.apiKey}`);
         return {
           ...currentState,
           settings: { ...currentState.settings, ...persisted.settings },
@@ -321,3 +383,5 @@ export const useAppStore = create<AppState>()(
     }
   )
 );
+
+debugLog('[STORE] Store created successfully');

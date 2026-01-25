@@ -9,12 +9,14 @@ Desktop Waifu is a Tauri + React + TypeScript desktop application featuring anim
 ## Build Commands
 
 **IMPORTANT: Use `bun dev` for development, NOT `bun tauri dev`.**
+**IMPORTANT: Always use `bun` instead of `npm`, `npx`, or `yarn`. This project uses bun as its package manager.**
 
 When asked about build/dev commands, always run `cat package.json | grep -A 15 '"scripts"'` to verify. Never assume based on conventions.
 
 ```bash
 bun dev              # PRIMARY DEV COMMAND - Runs Vite + desktop-waifu-overlay together
 bun build            # Type check + production build (frontend + overlay)
+bunx tsc --noEmit    # Type check only (no build output)
 ```
 
 ### Command Details
@@ -40,10 +42,12 @@ bun build            # Type check + production build (frontend + overlay)
 - `src-tauri/` - Rust backend and Tauri configuration
 
 ### State Management Pattern
-The Zustand store in `src/store/index.ts` manages three slices:
-- **Character**: isLoaded, currentAnimation, currentExpression, isTalking
+The Zustand store in `src/store/index.ts` manages five slices:
+- **Character**: isLoaded, currentAnimation, currentExpression, isTalking, isHiding
 - **Chat**: messages array, isThinking, isUserTyping
-- **Settings**: llmProvider, apiKey, model selection, UI preferences
+- **Settings**: llmProvider, apiKey, model selection, personality, UI preferences
+- **UI**: chatPanelOpen, isScaleSliderDragging, quadrant position
+- **Execution**: Command execution state with approval flow (status, generatedCommand, approved)
 
 ### LLM Provider Pattern
 Providers implement the `LLMProvider` interface in `src/lib/llm/providers/base.ts`:

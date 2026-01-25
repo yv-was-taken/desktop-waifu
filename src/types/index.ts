@@ -81,6 +81,7 @@ export interface AppSettings {
   llmModel: string;
   apiKey: string;
   alwaysOnTop: boolean;
+  hotkeyEnabled: boolean;
   characterScale: number;
   chatScale: number;
 }
