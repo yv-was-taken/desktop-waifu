@@ -290,10 +290,21 @@ fn build_ui(app: &Application, webview_url: &str) {
 
     // When window loses focus (user clicks away), switch to OnDemand mode
     // so other apps can receive keyboard input.
-    window.connect_is_active_notify(|w| {
-        if !w.is_active() {
+    // Also notify frontend of focus state changes for notification logic.
+    let webview_for_focus_notify = webview.clone();
+    window.connect_is_active_notify(move |w| {
+        let is_active = w.is_active();
+        if !is_active {
             w.set_keyboard_mode(KeyboardMode::OnDemand);
         }
+        // Update global variable AND dispatch event for frontend
+        // Using global variable ensures the value is always readable even if event is missed
+        let js = format!(
+            "window.__desktopWaifuWindowFocused = {}; window.dispatchEvent(new CustomEvent('windowFocusChange', {{ detail: {{ isFocused: {} }} }}))",
+            is_active, is_active
+        );
+        webview_for_focus_notify.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
+        debug_log!("[FOCUS] Window active state changed: is_active={}", is_active);
     });
 
     // Show the window
@@ -354,6 +365,9 @@ fn create_webview_with_handlers(
 
     // Register the "setInputRegion" message handler for click-through control
     content_manager.register_script_message_handler("setInputRegion", None);
+
+    // Register the "showNotification" message handler for desktop notifications
+    content_manager.register_script_message_handler("showNotification", None);
 
 
     // Clone window for windowControl handler
@@ -745,6 +759,28 @@ fn create_webview_with_handlers(
                             debug_log!("[INPUT_REGION] Set to full window: w={}, h={}", width, height);
                         }
                     }
+                }
+            }
+        }
+    });
+
+    // Set up showNotification handler for desktop notifications
+    content_manager.connect_script_message_received(Some("showNotification"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let title = parsed["title"].as_str().unwrap_or("Desktop Waifu");
+                let body = parsed["body"].as_str().unwrap_or("");
+
+                debug_log!("[NOTIFICATION] Showing notification: title={}, body={}", title, body);
+
+                // Show desktop notification via D-Bus (Linux) or native APIs (macOS/Windows)
+                if let Err(e) = notify_rust::Notification::new()
+                    .summary(title)
+                    .body(body)
+                    .appname("Desktop Waifu")
+                    .show()
+                {
+                    tracing::warn!("Failed to show notification: {}", e);
                 }
             }
         }

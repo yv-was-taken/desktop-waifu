@@ -3,7 +3,7 @@ import { useAppStore } from '../../store';
 import { defaultModels } from '../../lib/llm';
 import { personalities } from '../../lib/personalities';
 import { characters } from '../../characters';
-import type { LLMProviderType, PersonalityId, DetailLevel } from '../../types';
+import type { LLMProviderType, PersonalityId, DetailLevel, NotificationPreference } from '../../types';
 
 export function SettingsModal() {
   const settings = useAppStore((state) => state.settings);
@@ -262,6 +262,32 @@ export function SettingsModal() {
                 }`}
               />
             </button>
+          </div>
+
+          {/* Notifications Section Divider */}
+          <div className="pt-2">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-700 pb-2">
+              Notifications
+            </div>
+          </div>
+
+          {/* Notification Preference */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">Desktop Notifications</label>
+            <select
+              value={settings.notificationPreference}
+              onChange={(e) => updateSettings({ notificationPreference: e.target.value as NotificationPreference })}
+              className="w-full bg-gray-700 text-black rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            >
+              <option value="chat_closed">When chat is closed</option>
+              <option value="unfocused">When window is unfocused</option>
+              <option value="off">Off</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {settings.notificationPreference === 'chat_closed' && 'Show notification when a response arrives while the chat panel is closed.'}
+              {settings.notificationPreference === 'unfocused' && 'Show notification when a response arrives while the window is unfocused.'}
+              {settings.notificationPreference === 'off' && 'Never show desktop notifications.'}
+            </p>
           </div>
         </div>
 

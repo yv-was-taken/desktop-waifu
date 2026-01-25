@@ -9,6 +9,7 @@ import type {
   ExecutionStatus,
   CommandOutput,
   CodeExecutionState,
+  NotificationPreference,
 } from '../types';
 
 interface CharacterState {
@@ -41,6 +42,8 @@ interface SettingsState {
   detailLevel: DetailLevel;
   assistantSubject: string;
   customSubject: string;
+  // Notification settings
+  notificationPreference: NotificationPreference;
 }
 
 interface UIState {
@@ -175,6 +178,8 @@ export const useAppStore = create<AppState>()(
         detailLevel: 'balanced',
         assistantSubject: 'programming',
         customSubject: '',
+        // Notification defaults
+        notificationPreference: 'chat_closed',
       },
       updateSettings: (newSettings) =>
         set((state) => ({
@@ -305,6 +310,7 @@ export const useAppStore = create<AppState>()(
           assistantSubject: state.settings.assistantSubject,
           customSubject: state.settings.customSubject,
           showSettings: state.settings.showSettings,
+          notificationPreference: state.settings.notificationPreference,
         },
         ui: {
           chatPanelOpen: state.ui.chatPanelOpen,

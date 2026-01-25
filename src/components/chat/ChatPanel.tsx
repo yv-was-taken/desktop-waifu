@@ -5,7 +5,7 @@ import { CommandApproval } from './CommandApproval';
 import { useAppStore } from '../../store';
 import { getProvider } from '../../lib/llm';
 import { buildSystemPrompt } from '../../lib/personalities';
-import { executeCommand as platformExecuteCommand, getSystemInfo } from '../../lib/platform';
+import { executeCommand as platformExecuteCommand, getSystemInfo, showDesktopNotification, isWindowCurrentlyFocused } from '../../lib/platform';
 import { debugLog } from '../../lib/debug';
 import AnsiToHtml from 'ansi-to-html';
 import type { LLMMessage, SystemInfo } from '../../types';
@@ -91,6 +91,19 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
           }
 
           addMessage({ role: 'assistant', content: plainContent, htmlContent });
+          // Show notification based on user preference
+          const state = useAppStore.getState();
+          const pref = state.settings.notificationPreference;
+          const isChatOpen = state.ui.chatPanelOpen;
+          const windowFocused = isWindowCurrentlyFocused();
+          const shouldNotify =
+            (pref === 'chat_closed' && !isChatOpen) ||
+            (pref === 'unfocused' && !windowFocused);
+          debugLog(`[NOTIFICATION] pref=${pref}, isChatOpen=${isChatOpen}, windowFocused=${windowFocused}, shouldNotify=${shouldNotify}`);
+          if (shouldNotify) {
+            const preview = plainContent.substring(0, 100);
+            showDesktopNotification('Command Complete', preview + (preview.length >= 100 ? '...' : ''));
+          }
           clearExecution();
         } catch (error) {
           addMessage({
@@ -185,6 +198,20 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       } else {
         debugLog(`[LLM] No EXECUTE tag, adding as regular message`);
         addMessage({ role: 'assistant', content: response });
+        // Show notification based on user preference
+        const state = useAppStore.getState();
+        const pref = state.settings.notificationPreference;
+        const isChatOpen = state.ui.chatPanelOpen;
+        const windowFocused = isWindowCurrentlyFocused();
+        const shouldNotify =
+          (pref === 'chat_closed' && !isChatOpen) ||
+          (pref === 'unfocused' && !windowFocused);
+        debugLog(`[NOTIFICATION] pref=${pref}, isChatOpen=${isChatOpen}, windowFocused=${windowFocused}, shouldNotify=${shouldNotify}`);
+        if (shouldNotify) {
+          const preview = response.substring(0, 100);
+          debugLog(`[NOTIFICATION] Sending notification: "${preview}"`);
+          showDesktopNotification('Desktop Waifu', preview + (preview.length >= 100 ? '...' : ''));
+        }
       }
 
       setExpression('neutral');

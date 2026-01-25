@@ -31,6 +31,8 @@ declare global {
         applyAnchoring?: { postMessage: (msg: { isRightHalf: boolean; isBottomHalf: boolean; horizontalMargin: number; verticalMargin: number }) => void };
         // Debug logging handler (debug.ts)
         debug?: { postMessage: (msg: { message: string }) => void };
+        // Desktop notification handler (platform.ts)
+        showNotification?: { postMessage: (msg: { title: string; body: string }) => void };
       };
     };
   }
@@ -136,4 +138,36 @@ export async function clearInputRegion(): Promise<void> {
   if (isOverlayMode) {
     window.webkit?.messageHandlers?.setInputRegion?.postMessage({ mode: 'full' });
   }
+}
+
+/**
+ * Show a desktop notification (overlay mode only).
+ * Uses notify-rust via WebKit message handler for cross-platform support.
+ */
+export function showDesktopNotification(title: string, body: string): void {
+  // Debug: always log to webkit debug handler
+  window.webkit?.messageHandlers?.debug?.postMessage({
+    message: `[NOTIFICATION] showDesktopNotification called: isOverlay=${isOverlayMode}, title="${title}"`
+  });
+  if (isOverlayMode) {
+    window.webkit?.messageHandlers?.showNotification?.postMessage({ title, body });
+  }
+}
+
+/**
+ * Check if the window is currently focused (overlay mode only).
+ * Reads from a global variable set by Rust when window focus changes.
+ * Returns true if focused or if not in overlay mode.
+ */
+export function isWindowCurrentlyFocused(): boolean {
+  if (!isOverlayMode) {
+    return document.hasFocus();
+  }
+  // Read from global variable set by Rust's window.connect_is_active_notify
+  // Default to true if not yet set (window starts focused)
+  const focused = (window as Window & { __desktopWaifuWindowFocused?: boolean }).__desktopWaifuWindowFocused;
+  window.webkit?.messageHandlers?.debug?.postMessage({
+    message: `[FOCUS] isWindowCurrentlyFocused: __desktopWaifuWindowFocused=${focused}`
+  });
+  return focused ?? true;
 }
