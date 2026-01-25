@@ -5,7 +5,7 @@ mod tray;
 use clap::Parser;
 
 // Debug logging flag - set to true to enable debug output to terminal
-const DEBUG_LOGGING: bool = true;
+const DEBUG_LOGGING: bool = false;
 
 /// Desktop Waifu overlay - Animated 3D VRM characters for your desktop
 #[derive(Parser)]

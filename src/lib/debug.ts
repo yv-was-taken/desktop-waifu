@@ -3,7 +3,7 @@
  * Toggle DEBUG_ENABLED to true to enable debug output
  */
 
-const DEBUG_ENABLED = true;
+const DEBUG_ENABLED = false;
 
 export function debugLog(message: string): void {
   if (!DEBUG_ENABLED) return;
