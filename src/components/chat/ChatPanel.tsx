@@ -5,7 +5,8 @@ import { CommandApproval } from './CommandApproval';
 import { useAppStore } from '../../store';
 import { getProvider } from '../../lib/llm';
 import { buildSystemPrompt } from '../../lib/personalities';
-import { executeCommand as platformExecuteCommand, getSystemInfo } from '../../lib/platform';
+import { executeCommand as platformExecuteCommand, getSystemInfo, saveFile } from '../../lib/platform';
+import { exportToJSON, exportToMarkdown } from '../../lib/export';
 import { debugLog } from '../../lib/debug';
 import AnsiToHtml from 'ansi-to-html';
 import type { LLMMessage, SystemInfo } from '../../types';
@@ -31,6 +32,10 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   // System info for command execution context
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
 
+  // Export menu state
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportNotification, setExportNotification] = useState<string | null>(null);
+
   // ANSI to HTML converter
   const ansiConverter = useMemo(() => new AnsiToHtml({
     fg: '#e2e8f0', // slate-200
@@ -51,6 +56,46 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       .then(setSystemInfo)
       .catch((err) => console.error('Failed to get system info:', err));
   }, []);
+
+  // Close export menu when clicking outside
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handleClickOutside = () => setShowExportMenu(false);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showExportMenu]);
+
+  // Handle export action
+  const handleExport = useCallback(async (format: 'json' | 'markdown') => {
+    setShowExportMenu(false);
+
+    const content = format === 'json' ? exportToJSON(messages) : exportToMarkdown(messages);
+    const extension = format === 'json' ? 'json' : 'md';
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const hours = now.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    const time = `${hours12}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${ampm}`;
+    const timestamp = `${date}_${time}`;
+    const filename = `conversation-${timestamp}.${extension}`;
+    const fullPath = `${settings.exportPath}/${filename}`;
+
+    try {
+      const result = await saveFile(fullPath, content);
+      if (!result.success) {
+        setExportNotification(`Export failed: ${result.error}`);
+      } else {
+        setExportNotification(`Saved to ${fullPath}`);
+      }
+    } catch (error) {
+      setExportNotification(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    // Clear notification after 3 seconds
+    setTimeout(() => setExportNotification(null), 3000);
+  }, [messages, settings.exportPath]);
 
   // Execute command and display output as chat message
   // CRITICAL: Only runs when status is 'executing' AND approved is explicitly true
@@ -222,6 +267,34 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
               <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
           </button>
+          <div className="relative">
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}
+              disabled={messages.length === 0}
+              className="text-white hover:text-pink-400 transition-colors p-1.5 border-2 border-white hover:border-pink-400 transform hover:scale-110 cursor-grab active:cursor-grabbing disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Export chat"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-slate-800 border border-slate-600 rounded shadow-lg z-50 min-w-[140px]">
+                <button
+                  onClick={() => handleExport('json')}
+                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-slate-700"
+                >
+                  Export as JSON
+                </button>
+                <button
+                  onClick={() => handleExport('markdown')}
+                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-slate-700"
+                >
+                  Export as Markdown
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={toggleSettings}
             className="text-white hover:text-pink-400 transition-colors p-1.5 border-2 border-white hover:border-pink-400 transform hover:scale-110 cursor-grab active:cursor-grabbing"
@@ -244,6 +317,13 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
           )}
         </div>
       </div>
+
+      {/* Export notification */}
+      {exportNotification && (
+        <div className="px-3 py-2 bg-slate-800 border-b border-slate-600 text-sm text-slate-300">
+          {exportNotification}
+        </div>
+      )}
 
       {/* Messages */}
       <MessageList messages={messages} isTyping={isThinking} />

@@ -355,6 +355,9 @@ fn create_webview_with_handlers(
     // Register the "setInputRegion" message handler for click-through control
     content_manager.register_script_message_handler("setInputRegion", None);
 
+    // Register the "saveFile" message handler for file export
+    content_manager.register_script_message_handler("saveFile", None);
+
 
     // Clone window for windowControl handler
     let window_for_control = window.clone();
@@ -746,6 +749,69 @@ fn create_webview_with_handlers(
                         }
                     }
                 }
+            }
+        }
+    });
+
+    // Set up saveFile handler for exporting conversations
+    let webview_for_save = webview.clone();
+    content_manager.connect_script_message_received(Some("saveFile"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let path = parsed["path"].as_str().unwrap_or("").to_string();
+                let content = parsed["content"].as_str().unwrap_or("").to_string();
+                let callback_id = parsed["callbackId"].as_str().unwrap_or("").to_string();
+
+                if path.is_empty() {
+                    return;
+                }
+
+                let (tx, rx) = std::sync::mpsc::channel::<String>();
+
+                std::thread::spawn(move || {
+                    // Expand ~ to home directory
+                    let expanded_path = if path.starts_with("~/") {
+                        if let Ok(home) = std::env::var("HOME") {
+                            path.replacen("~", &home, 1)
+                        } else {
+                            path.clone()
+                        }
+                    } else {
+                        path.clone()
+                    };
+
+                    // Create parent directories if needed
+                    if let Some(parent) = std::path::Path::new(&expanded_path).parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+
+                    // Write file
+                    let result = std::fs::write(&expanded_path, &content);
+                    let (success, error) = match result {
+                        Ok(_) => (true, String::new()),
+                        Err(e) => (false, e.to_string()),
+                    };
+
+                    let error_escaped = error.replace('\\', "\\\\").replace('`', "\\`");
+                    let js = format!(
+                        r#"window.__commandCallbacks && window.__commandCallbacks['{}'] && window.__commandCallbacks['{}']( {{ success: {}, error: `{}` }} )"#,
+                        callback_id, callback_id, success, error_escaped
+                    );
+                    let _ = tx.send(js);
+                });
+
+                // Poll for result on main thread
+                let webview = webview_for_save.clone();
+                glib::timeout_add_local(Duration::from_millis(10), move || {
+                    match rx.try_recv() {
+                        Ok(js) => {
+                            webview.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
+                            glib::ControlFlow::Break
+                        }
+                        Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+                    }
+                });
             }
         }
     });
