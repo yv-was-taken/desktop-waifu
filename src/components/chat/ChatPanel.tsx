@@ -399,6 +399,21 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
           // Trigger command approval flow
           setGeneratedCommand(content, executeResult.command);
           debugLog(`[LLM] setGeneratedCommand called, current status=${useAppStore.getState().execution.status}`);
+        } else {
+          // Show notification based on user preference (streaming complete)
+          const state = useAppStore.getState();
+          const pref = state.settings.notificationPreference;
+          const isChatOpen = state.ui.chatPanelOpen;
+          const windowFocused = isWindowCurrentlyFocused();
+          const shouldNotify =
+            (pref === 'chat_closed' && !isChatOpen) ||
+            (pref === 'unfocused' && !windowFocused);
+          debugLog(`[NOTIFICATION] pref=${pref}, isChatOpen=${isChatOpen}, windowFocused=${windowFocused}, shouldNotify=${shouldNotify}`);
+          if (shouldNotify) {
+            const preview = response.substring(0, 100);
+            debugLog(`[NOTIFICATION] Sending notification: "${preview}"`);
+            showDesktopNotification('Desktop Waifu', preview + (preview.length >= 100 ? '...' : ''));
+          }
         }
       } else {
         // Fallback to non-streaming
