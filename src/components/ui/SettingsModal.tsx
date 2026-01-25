@@ -374,6 +374,28 @@ export function SettingsModal() {
               Manually editing your compositor config while enabled may cause issues.
             </p>
           </div>
+
+          {/* Data Section Divider */}
+          <div className="pt-2">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-700 pb-2">
+              Data
+            </div>
+          </div>
+
+          {/* Export Path */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">Export Path</label>
+            <input
+              type="text"
+              value={settings.exportPath}
+              onChange={(e) => updateSettings({ exportPath: e.target.value })}
+              placeholder="~/Documents/DesktopWaifu"
+              className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 placeholder-gray-400"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Directory where conversation exports will be saved.
+            </p>
+          </div>
         </div>
 
         <div className="mt-6 pt-4 border-t border-gray-700">

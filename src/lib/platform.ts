@@ -33,6 +33,8 @@ declare global {
         debug?: { postMessage: (msg: { message: string }) => void };
         // Hotkey enable/disable handler (SettingsModal.tsx)
         setHotkeyEnabled?: { postMessage: (msg: { enabled: boolean }) => void };
+        // File save handler (export.ts)
+        saveFile?: { postMessage: (msg: { path: string; content: string; callbackId: string }) => void };
       };
     };
   }
@@ -147,5 +149,42 @@ export async function clearInputRegion(): Promise<void> {
 export function setHotkeyEnabled(enabled: boolean): void {
   if (isOverlayMode) {
     window.webkit?.messageHandlers?.setHotkeyEnabled?.postMessage({ enabled });
+  }
+}
+
+/**
+ * Result of a saveFile operation.
+ */
+export interface SaveFileResult {
+  success: boolean;
+  error: string;
+}
+
+/**
+ * Save content to a file at the specified path.
+ * Uses WebKit message handlers in overlay mode.
+ */
+export async function saveFile(path: string, content: string): Promise<SaveFileResult> {
+  if (isOverlayMode) {
+    return new Promise((resolve, reject) => {
+      const callbackId = generateCallbackId();
+
+      window.__commandCallbacks![callbackId] = (result: unknown) => {
+        delete window.__commandCallbacks![callbackId];
+        resolve(result as SaveFileResult);
+      };
+
+      setTimeout(() => {
+        if (window.__commandCallbacks![callbackId]) {
+          delete window.__commandCallbacks![callbackId];
+          reject(new Error('Save file timed out'));
+        }
+      }, 10000);
+
+      window.webkit?.messageHandlers?.saveFile?.postMessage({ path, content, callbackId });
+    });
+  } else {
+    // Tauri mode fallback (not currently used)
+    return { success: false, error: 'Not implemented' };
   }
 }

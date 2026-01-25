@@ -16,7 +16,7 @@ When asked about build/dev commands, always run `cat package.json | grep -A 15 '
 ```bash
 bun dev              # PRIMARY DEV COMMAND - Runs Vite + desktop-waifu-overlay together
 bun build            # Type check + production build (frontend + overlay)
-bun run tsc --noEmit # Type check only
+bunx tsc --noEmit    # Type check only (no build output)
 ```
 
 ### Command Details
@@ -42,10 +42,12 @@ bun run tsc --noEmit # Type check only
 - `src-tauri/` - Rust backend and Tauri configuration
 
 ### State Management Pattern
-The Zustand store in `src/store/index.ts` manages three slices:
-- **Character**: isLoaded, currentAnimation, currentExpression, isTalking
+The Zustand store in `src/store/index.ts` manages five slices:
+- **Character**: isLoaded, currentAnimation, currentExpression, isTalking, isHiding
 - **Chat**: messages array, isThinking, isUserTyping
-- **Settings**: llmProvider, apiKey, model selection, UI preferences
+- **Settings**: llmProvider, apiKey, model selection, personality, UI preferences
+- **UI**: chatPanelOpen, isScaleSliderDragging, quadrant position
+- **Execution**: Command execution state with approval flow (status, generatedCommand, approved)
 
 ### LLM Provider Pattern
 Providers implement the `LLMProvider` interface in `src/lib/llm/providers/base.ts`:

@@ -2,53 +2,9 @@
 
 This document outlines planned features for Desktop Waifu, organized by implementation phase. Features are prioritized by impact and effort.
 
----
-
-## Phase 1: Quick Wins (High Impact, Low Effort)
-
-Features leveraging existing infrastructure with minimal new code.
-
-### Streaming Responses
-- [ ] Enable real-time token streaming in chat UI
-- **Effort**: ~2 hours
-- **Notes**: `streamChat()` method exists in providers but is unused in ChatPanel
-- **Files**: `src/components/chat/ChatPanel.tsx`, `src/lib/llm/providers/base.ts`
-
-### Slash Commands
-- [ ] `/clear` - Clear conversation history
-- [ ] `/settings` - Open settings panel
-- [ ] `/character` - Switch character
-- [ ] `/help` - Show available commands
-- **Effort**: ~4 hours
-- **Notes**: Parse input in ChatPanel before sending to LLM
-- **Files**: `src/components/chat/ChatPanel.tsx`
-
-### Desktop Notifications
-- [ ] Notify when response is ready (when window unfocused)
-- **Effort**: ~2 hours
-- **Notes**: Use Tauri notification plugin
-- **Files**: `src-tauri/Cargo.toml`, `src/lib/platform.ts`
-
-### Message Context Menu
-- [ ] Right-click menu on messages
-- [ ] Copy message text
-- [ ] Delete message
-- [ ] Regenerate response
-- **Effort**: ~3 hours
-- **Files**: `src/components/chat/`, `src/store/index.ts`
-
----
-
 ## Phase 2: Core Enhancements (Medium Effort)
 
 Significant UX improvements requiring moderate architectural changes.
-
-### Global Hotkeys
-- [ ] Show/hide overlay via Super+W (or configurable)
-- [ ] Focus input field on show
-- **Effort**: ~6 hours
-- **Notes**: Requires overlay IPC communication
-- **Files**: `desktop-waifu-overlay/src/main.rs`, `src/lib/platform.ts`
 
 ### Command Palette
 - [ ] Cmd/Ctrl+K to open modal
@@ -57,38 +13,6 @@ Significant UX improvements requiring moderate architectural changes.
 - [ ] Character switching
 - **Effort**: ~8 hours
 - **Files**: `src/components/`, `src/store/index.ts`
-
-### System Tray
-- [ ] Tray icon with menu
-- [ ] Show/hide window
-- [ ] Quick quit option
-- [ ] Status indicator
-- **Effort**: ~4 hours
-- **Notes**: `tray.rs` exists but needs wiring to main application loop
-- **Files**: `desktop-waifu-overlay/src/tray.rs`, `desktop-waifu-overlay/src/main.rs`
-
-### Clipboard Integration
-- [ ] One-click copy of responses
-- [ ] Paste images for vision models
-- [ ] Clipboard history access
-- **Effort**: ~4 hours
-- **Files**: `src/components/chat/`, `src/lib/platform.ts`
-
-### Toast Notifications
-- [ ] In-app notification system
-- [ ] Success/error/info variants
-- [ ] Auto-dismiss with configurable duration
-- **Effort**: ~4 hours
-- **Files**: `src/components/`, `src/store/index.ts`
-
-### Conversation Export
-- [ ] Export as JSON (full data)
-- [ ] Export as Markdown (readable)
-- [ ] File save dialog integration
-- **Effort**: ~4 hours
-- **Files**: `src/components/chat/`, `src/lib/platform.ts`
-
----
 
 ## Phase 3: Agent Harness (Major Feature)
 
@@ -252,7 +176,7 @@ Phase 5 (depends on stable base)
 
 When implementing a feature:
 1. Check the dependency graph for prerequisites
-2. Create a feature branch from `master`
+2. Create a feature branch from `development`
 3. Update relevant checkboxes in this document
 4. Reference the listed files as starting points
 5. Follow patterns established in CLAUDE.md
