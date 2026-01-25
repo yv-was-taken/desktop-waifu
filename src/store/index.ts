@@ -41,6 +41,8 @@ interface SettingsState {
   detailLevel: DetailLevel;
   assistantSubject: string;
   customSubject: string;
+  // Export settings
+  exportPath: string;
 }
 
 interface UIState {
@@ -175,6 +177,8 @@ export const useAppStore = create<AppState>()(
         detailLevel: 'balanced',
         assistantSubject: 'programming',
         customSubject: '',
+        // Export settings
+        exportPath: '~/Documents/DesktopWaifu',
       },
       updateSettings: (newSettings) =>
         set((state) => ({
@@ -305,6 +309,7 @@ export const useAppStore = create<AppState>()(
           assistantSubject: state.settings.assistantSubject,
           customSubject: state.settings.customSubject,
           showSettings: state.settings.showSettings,
+          exportPath: state.settings.exportPath,
         },
         ui: {
           chatPanelOpen: state.ui.chatPanelOpen,
