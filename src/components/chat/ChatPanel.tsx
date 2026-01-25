@@ -365,6 +365,9 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
             displayedLength += 1;
             updateMessageContent(messageId, fullResponse.slice(0, displayedLength));
             timeoutId = setTimeout(animateTyping, 5);
+          } else {
+            // Animation caught up to fullResponse - reset so new chunks can restart it
+            timeoutId = null;
           }
         };
 
