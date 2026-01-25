@@ -38,6 +38,12 @@ sed -i "s/^version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" "$PROJECT_ROOT/src-
 echo "  - desktop-waifu-overlay/Cargo.toml"
 sed -i "s/^version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" "$PROJECT_ROOT/desktop-waifu-overlay/Cargo.toml"
 
+# Update Cargo.lock files
+echo "  - desktop-waifu-overlay/Cargo.lock"
+(cd "$PROJECT_ROOT/desktop-waifu-overlay" && cargo update --quiet)
+echo "  - src-tauri/Cargo.lock"
+(cd "$PROJECT_ROOT/src-tauri" && cargo update --quiet)
+
 # Update AUR PKGBUILD
 echo "  - packaging/aur/PKGBUILD"
 sed -i "s/^pkgver=.*/pkgver=$NEW_VERSION/" "$PROJECT_ROOT/packaging/aur/PKGBUILD"
@@ -64,7 +70,6 @@ echo "Version bumped to $NEW_VERSION"
 echo ""
 echo "Next steps:"
 echo "  1. Update CHANGELOG.md with release notes"
-echo "  2. Run 'cargo update' to update Cargo.lock"
-echo "  3. Commit changes: git commit -am \"Bump version to $NEW_VERSION\""
-echo "  4. Create and push tag: git tag v$NEW_VERSION && git push origin v$NEW_VERSION"
-echo "  5. After release, update Homebrew formula sha256 hash"
+echo "  2. Commit changes: git commit -am \"Bump version to $NEW_VERSION\""
+echo "  3. Create and push tag: git tag v$NEW_VERSION && git push origin v$NEW_VERSION"
+echo "  4. After release, update Homebrew formula sha256 hash"
