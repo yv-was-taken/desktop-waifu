@@ -3,7 +3,10 @@
 //! Uses Unix sockets for bidirectional communication.
 
 use serde::{Deserialize, Serialize};
+use std::io::{Read, Write};
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
+use std::sync::mpsc;
 
 /// Commands sent from Tauri to the overlay
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,4 +62,47 @@ pub enum OverlayEvent {
 pub fn socket_path() -> PathBuf {
     let uid = unsafe { libc::getuid() };
     PathBuf::from(format!("/run/user/{}/desktop-waifu.sock", uid))
+}
+
+/// Send a command to the running instance via Unix socket
+pub fn send_command(cmd: &str) -> Result<(), std::io::Error> {
+    let socket_path = socket_path();
+    let mut stream = UnixStream::connect(&socket_path)?;
+    stream.write_all(cmd.as_bytes())?;
+    Ok(())
+}
+
+/// Spawn a socket listener that receives commands from CLI invocations
+/// Returns a receiver that yields command strings
+pub fn spawn_socket_listener() -> mpsc::Receiver<String> {
+    let (tx, rx) = mpsc::channel();
+    let socket_path = socket_path();
+
+    // Remove stale socket file if it exists
+    let _ = std::fs::remove_file(&socket_path);
+
+    std::thread::spawn(move || {
+        let listener = match UnixListener::bind(&socket_path) {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("Failed to bind socket at {:?}: {}", socket_path, e);
+                return;
+            }
+        };
+
+        for stream in listener.incoming() {
+            if let Ok(mut stream) = stream {
+                let mut buf = [0u8; 64];
+                if let Ok(n) = stream.read(&mut buf) {
+                    let cmd = String::from_utf8_lossy(&buf[..n]).trim().to_string();
+                    if tx.send(cmd).is_err() {
+                        // Receiver dropped, exit thread
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    rx
 }

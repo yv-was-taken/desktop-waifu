@@ -36,6 +36,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 thiserror = "2"
 
+# CLI argument parsing
+clap = { version = "4", features = ["derive"] }
+
 # System tray (StatusNotifierItem protocol)
 ksni = "0.2"
 

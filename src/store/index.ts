@@ -30,6 +30,7 @@ interface SettingsState {
   llmModel: string;
   apiKey: string;
   alwaysOnTop: boolean;
+  hotkeyEnabled: boolean;
   characterScale: number;
   chatScale: number;
   fontSize: number;
@@ -164,6 +165,7 @@ export const useAppStore = create<AppState>()(
         llmModel: 'gpt-4o-mini',
         apiKey: '',
         alwaysOnTop: true,
+        hotkeyEnabled: false,
         characterScale: 1.0,
         chatScale: 1.0,
         fontSize: 14,
@@ -296,6 +298,7 @@ export const useAppStore = create<AppState>()(
           llmModel: state.settings.llmModel,
           apiKey: state.settings.apiKey,
           alwaysOnTop: state.settings.alwaysOnTop,
+          hotkeyEnabled: state.settings.hotkeyEnabled,
           characterScale: state.settings.characterScale,
           chatScale: state.settings.chatScale,
           fontSize: state.settings.fontSize,

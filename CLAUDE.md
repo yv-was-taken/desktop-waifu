@@ -9,12 +9,14 @@ Desktop Waifu is a Tauri + React + TypeScript desktop application featuring anim
 ## Build Commands
 
 **IMPORTANT: Use `bun dev` for development, NOT `bun tauri dev`.**
+**IMPORTANT: Always use `bun` instead of `npm`, `npx`, or `yarn`. This project uses bun as its package manager.**
 
 When asked about build/dev commands, always run `cat package.json | grep -A 15 '"scripts"'` to verify. Never assume based on conventions.
 
 ```bash
 bun dev              # PRIMARY DEV COMMAND - Runs Vite + desktop-waifu-overlay together
 bun build            # Type check + production build (frontend + overlay)
+bun run tsc --noEmit # Type check only
 ```
 
 ### Command Details

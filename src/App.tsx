@@ -3,6 +3,7 @@ import { CharacterCanvas } from './components/character';
 import { ChatPanel } from './components/chat';
 import { SettingsModal, TitleBar } from './components/ui';
 import { useAppStore } from './store';
+import { setHotkeyEnabled } from './lib/platform';
 
 // Check if we're in overlay mode (desktop pet mode)
 // Window interface types are declared in src/lib/platform.ts
@@ -122,6 +123,26 @@ function OverlayMode() {
     window.addEventListener('trayShow', handleTrayShow);
     return () => window.removeEventListener('trayShow', handleTrayShow);
   }, [setHiding]);
+
+  // Handle "hotkeyShow" event from Rust when user presses global hotkey
+  const hotkeyEnabled = useAppStore((state) => state.settings.hotkeyEnabled) ?? false;
+  useEffect(() => {
+    const handleHotkeyShow = () => {
+      if (!hotkeyEnabled) return; // Hotkey disabled in settings
+      // Reset hiding state - this will trigger the "show" animation
+      setHiding(false);
+      // Open chat panel and focus input
+      setChatPanelOpen(true);
+    };
+
+    window.addEventListener('hotkeyShow', handleHotkeyShow);
+    return () => window.removeEventListener('hotkeyShow', handleHotkeyShow);
+  }, [setHiding, setChatPanelOpen, hotkeyEnabled]);
+
+  // Sync hotkey enabled state with Rust backend
+  useEffect(() => {
+    setHotkeyEnabled(hotkeyEnabled);
+  }, [hotkeyEnabled]);
 
   // Handle initial state from Rust (position + quadrant + screen dimensions)
   useEffect(() => {

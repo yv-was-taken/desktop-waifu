@@ -2,8 +2,27 @@ mod ipc;
 mod server;
 mod tray;
 
+use clap::Parser;
+
 // Debug logging flag - set to true to enable debug output to terminal
 const DEBUG_LOGGING: bool = false;
+
+/// Desktop Waifu overlay - Animated 3D VRM characters for your desktop
+#[derive(Parser)]
+#[command(name = "desktop-waifu-overlay", version, about)]
+struct Cli {
+    /// Toggle overlay visibility (send command to running instance)
+    #[arg(long)]
+    toggle: bool,
+
+    /// Show overlay (send command to running instance)
+    #[arg(long)]
+    show: bool,
+
+    /// Hide overlay (send command to running instance)
+    #[arg(long)]
+    hide: bool,
+}
 
 // Helper macro for conditional debug logging
 macro_rules! debug_log {
@@ -26,7 +45,7 @@ use std::time::Duration;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 use webkit6::prelude::*;
-use webkit6::{Settings as WebViewSettings, UserContentManager, WebView};
+use webkit6::{NetworkSession, Settings as WebViewSettings, UserContentManager, WebView};
 
 use tray::{spawn_tray, update_tray_visibility, TrayMessage};
 
@@ -84,6 +103,23 @@ fn get_screen_dimensions(window: &ApplicationWindow) -> Option<(i32, i32)> {
 }
 
 fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    // Handle CLI commands (client mode) - send to running instance and exit
+    if cli.toggle {
+        return ipc::send_command("toggle")
+            .map_err(|e| anyhow::anyhow!("Failed to send toggle: {}. Is desktop-waifu running?", e));
+    }
+    if cli.show {
+        return ipc::send_command("show")
+            .map_err(|e| anyhow::anyhow!("Failed to send show: {}. Is desktop-waifu running?", e));
+    }
+    if cli.hide {
+        return ipc::send_command("hide")
+            .map_err(|e| anyhow::anyhow!("Failed to send hide: {}. Is desktop-waifu running?", e));
+    }
+
+    // Normal startup (server mode) - continue with GUI
     // Initialize logging
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::DEBUG)
@@ -245,11 +281,30 @@ fn build_ui(app: &Application, webview_url: &str) {
         webview_for_focus.grab_focus();
     });
 
+    // Track visibility state (shared between tray and IPC handlers)
+    let is_visible = Rc::new(RefCell::new(true));
+
+    // Track hotkey enabled state (controlled by frontend settings)
+    let hotkey_enabled = Rc::new(RefCell::new(false));
+
+    // Set up hotkey enabled handler (frontend tells us when setting changes)
+    let hotkey_enabled_for_handler = hotkey_enabled.clone();
+    content_manager.connect_script_message_received(Some("setHotkeyEnabled"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let enabled = parsed["enabled"].as_bool().unwrap_or(false);
+                *hotkey_enabled_for_handler.borrow_mut() = enabled;
+                debug_log!("[HOTKEY] Hotkey enabled set to: {}", enabled);
+            }
+        }
+    });
+
     // Set up tray message handler on GTK main loop
     if let Some(receiver) = tray_receiver {
         let window_for_tray = window.clone();
         let webview_for_tray = webview.clone();
         let tray_handle_for_update = tray_handle.clone();
+        let is_visible_for_tray = is_visible.clone();
 
         // Poll for tray messages every 100ms
         glib::timeout_add_local(Duration::from_millis(100), move || {
@@ -257,6 +312,7 @@ fn build_ui(app: &Application, webview_url: &str) {
                 match msg {
                     TrayMessage::Show => {
                         window_for_tray.present();
+                        *is_visible_for_tray.borrow_mut() = true;
                         webview_for_tray.evaluate_javascript(
                             "window.dispatchEvent(new CustomEvent('trayShow'))",
                             None,
@@ -270,6 +326,7 @@ fn build_ui(app: &Application, webview_url: &str) {
                     }
                     TrayMessage::Hide => {
                         window_for_tray.hide();
+                        *is_visible_for_tray.borrow_mut() = false;
                         if let Some(ref handle) = tray_handle_for_update {
                             update_tray_visibility(handle, false);
                         }
@@ -283,6 +340,80 @@ fn build_ui(app: &Application, webview_url: &str) {
             glib::ControlFlow::Continue
         });
     }
+
+    // Spawn IPC socket listener for CLI commands (--toggle, --show, --hide)
+    let ipc_receiver = ipc::spawn_socket_listener();
+
+    // Poll for IPC messages every 50ms
+    let window_for_ipc = window.clone();
+    let webview_for_ipc = webview.clone();
+    let is_visible_for_ipc = is_visible.clone();
+    let tray_handle_for_ipc = tray_handle.clone();
+    let hotkey_enabled_for_ipc = hotkey_enabled.clone();
+
+    glib::timeout_add_local(Duration::from_millis(50), move || {
+        while let Ok(cmd) = ipc_receiver.try_recv() {
+            // Check if hotkey is enabled before processing commands
+            if !*hotkey_enabled_for_ipc.borrow() {
+                debug_log!("[IPC] Hotkey disabled, ignoring command: {}", cmd);
+                continue;
+            }
+
+            match cmd.as_str() {
+                "toggle" => {
+                    let visible = *is_visible_for_ipc.borrow();
+                    if visible {
+                        window_for_ipc.hide();
+                        *is_visible_for_ipc.borrow_mut() = false;
+                        if let Some(ref h) = tray_handle_for_ipc {
+                            update_tray_visibility(h, false);
+                        }
+                    } else {
+                        window_for_ipc.present();
+                        *is_visible_for_ipc.borrow_mut() = true;
+                        // Dispatch hotkeyShow - opens chat + focuses input
+                        webview_for_ipc.evaluate_javascript(
+                            "window.dispatchEvent(new CustomEvent('hotkeyShow'))",
+                            None,
+                            None,
+                            None::<&gio::Cancellable>,
+                            |_| {},
+                        );
+                        if let Some(ref h) = tray_handle_for_ipc {
+                            update_tray_visibility(h, true);
+                        }
+                    }
+                }
+                "show" => {
+                    if !*is_visible_for_ipc.borrow() {
+                        window_for_ipc.present();
+                        *is_visible_for_ipc.borrow_mut() = true;
+                        webview_for_ipc.evaluate_javascript(
+                            "window.dispatchEvent(new CustomEvent('hotkeyShow'))",
+                            None,
+                            None,
+                            None::<&gio::Cancellable>,
+                            |_| {},
+                        );
+                        if let Some(ref h) = tray_handle_for_ipc {
+                            update_tray_visibility(h, true);
+                        }
+                    }
+                }
+                "hide" => {
+                    if *is_visible_for_ipc.borrow() {
+                        window_for_ipc.hide();
+                        *is_visible_for_ipc.borrow_mut() = false;
+                        if let Some(ref h) = tray_handle_for_ipc {
+                            update_tray_visibility(h, false);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        glib::ControlFlow::Continue
+    });
 
     // Load the webview URL (dev server or static file server)
     webview.load_uri(webview_url);
@@ -309,6 +440,20 @@ fn create_webview_with_handlers(
     quadrant: Rc<RefCell<Quadrant>>,
     tray_handle: Option<ksni::Handle<tray::DesktopWaifuTray>>,
 ) -> WebView {
+    // Set up persistent storage for localStorage/cookies
+    // This ensures API keys and settings are preserved across sessions
+    let data_dir = glib::user_data_dir().join("desktop-waifu");
+    let cache_dir = glib::user_cache_dir().join("desktop-waifu");
+
+    // Create directories if they don't exist
+    let _ = std::fs::create_dir_all(&data_dir);
+    let _ = std::fs::create_dir_all(&cache_dir);
+
+    let data_dir_str = data_dir.to_str().unwrap_or("/tmp/desktop-waifu");
+    let cache_dir_str = cache_dir.to_str().unwrap_or("/tmp/desktop-waifu-cache");
+
+    let network_session = NetworkSession::new(Some(data_dir_str), Some(cache_dir_str));
+
     // Create WebView settings
     let settings = WebViewSettings::new();
 
@@ -354,6 +499,9 @@ fn create_webview_with_handlers(
 
     // Register the "setInputRegion" message handler for click-through control
     content_manager.register_script_message_handler("setInputRegion", None);
+
+    // Register the "setHotkeyEnabled" message handler for hotkey enable/disable
+    content_manager.register_script_message_handler("setHotkeyEnabled", None);
 
 
     // Clone window for windowControl handler
@@ -427,10 +575,11 @@ fn create_webview_with_handlers(
         }
     });
 
-    // Create WebView with the content manager (before connecting handlers that need webview)
+    // Create WebView with the content manager and persistent storage
     let webview = WebView::builder()
         .settings(&settings)
         .user_content_manager(&content_manager)
+        .network_session(&network_session)
         .build();
 
     // Make WebView background transparent (RGBA with 0 alpha)
