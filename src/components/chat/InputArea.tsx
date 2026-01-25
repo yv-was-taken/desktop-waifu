@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store';
 import { readClipboardImage, fileToImageAttachment, revokeImagePreview, SUPPORTED_MIME_TYPES } from '../../lib/image';
+import { isOverlayMode, openFileDialog, type FileDialogResult } from '../../lib/platform';
 import type { ImageAttachment } from '../../types';
 
 interface InputAreaProps {
@@ -110,6 +111,34 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
     });
   }, []);
 
+  // Convert FileDialogResult to ImageAttachment
+  const fileDialogResultToAttachment = useCallback((result: FileDialogResult): ImageAttachment => {
+    // Create a data URL from base64 data
+    const dataUrl = `data:${result.mimeType};base64,${result.data}`;
+    return {
+      id: crypto.randomUUID(),
+      mimeType: result.mimeType as ImageAttachment['mimeType'],
+      data: result.data,
+      previewUrl: dataUrl,
+    };
+  }, []);
+
+  // Handle attach button click - use native dialog in overlay mode
+  const handleAttachClick = useCallback(async () => {
+    if (isOverlayMode) {
+      // Use native GTK4 file dialog in overlay mode
+      // Rust handler will temporarily lower overlay layer so dialog appears on top
+      const files = await openFileDialog();
+      if (files && files.length > 0) {
+        const newImages = files.map(fileDialogResultToAttachment);
+        setPendingImages((prev) => [...prev, ...newImages]);
+      }
+    } else {
+      // Fall back to HTML file input in non-overlay mode
+      fileInputRef.current?.click();
+    }
+  }, [fileDialogResultToAttachment]);
+
   // Cleanup preview URLs on unmount
   useEffect(() => {
     return () => {
@@ -209,7 +238,7 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
 
         {/* Attach button */}
         <button
-          onClick={() => fileInputRef.current?.click()}
+          onClick={handleAttachClick}
           disabled={disabled}
           className="bg-slate-700 text-white border border-slate-600 px-3 py-3 hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="Attach image"
