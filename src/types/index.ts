@@ -1,7 +1,28 @@
+// Image Types
+export interface ImageAttachment {
+  id: string;
+  data: string;        // base64 (no prefix)
+  mimeType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+  previewUrl: string;  // data URL for preview
+}
+
+export interface LLMTextContent {
+  type: 'text';
+  text: string;
+}
+
+export interface LLMImageContent {
+  type: 'image';
+  data: string;
+  mimeType: string;
+}
+
+export type LLMContentPart = LLMTextContent | LLMImageContent;
+
 // LLM Types
 export interface LLMMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | LLMContentPart[];
 }
 
 export interface LLMConfig {
@@ -51,6 +72,7 @@ export interface ChatMessage {
   timestamp: number;
   emotion?: string;
   htmlContent?: string; // Pre-rendered HTML (e.g., ANSI-colored terminal output)
+  images?: ImageAttachment[]; // Image attachments for vision models
 }
 
 // Settings Types

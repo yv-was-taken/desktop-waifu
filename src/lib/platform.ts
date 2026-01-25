@@ -31,6 +31,8 @@ declare global {
         applyAnchoring?: { postMessage: (msg: { isRightHalf: boolean; isBottomHalf: boolean; horizontalMargin: number; verticalMargin: number }) => void };
         // Debug logging handler (debug.ts)
         debug?: { postMessage: (msg: { message: string }) => void };
+        // Native file dialog handler (overlay mode only)
+        openFileDialog?: { postMessage: (msg: { callbackId: string }) => void };
         // Hotkey enable/disable handler (SettingsModal.tsx)
         setHotkeyEnabled?: { postMessage: (msg: { enabled: boolean }) => void };
         // File save handler (export.ts)
@@ -140,6 +142,45 @@ export async function clearInputRegion(): Promise<void> {
   if (isOverlayMode) {
     window.webkit?.messageHandlers?.setInputRegion?.postMessage({ mode: 'full' });
   }
+}
+
+/**
+ * File data returned from the native file dialog.
+ */
+export interface FileDialogResult {
+  data: string;      // Base64-encoded file contents
+  mimeType: string;  // MIME type (e.g., "image/png")
+  filename: string;  // Original filename
+}
+
+/**
+ * Open a native file dialog for selecting images (overlay mode only).
+ * Returns null if not in overlay mode or if dialog was cancelled.
+ * Uses GTK4's FileDialog API which properly integrates with Wayland.
+ */
+export async function openFileDialog(): Promise<FileDialogResult[] | null> {
+  if (!isOverlayMode) {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    const callbackId = generateCallbackId();
+
+    window.__commandCallbacks![callbackId] = (result: unknown) => {
+      delete window.__commandCallbacks![callbackId];
+      resolve(result as FileDialogResult[] | null);
+    };
+
+    // Set timeout (30 seconds - file selection can take a while)
+    setTimeout(() => {
+      if (window.__commandCallbacks![callbackId]) {
+        delete window.__commandCallbacks![callbackId];
+        resolve(null);
+      }
+    }, 30000);
+
+    window.webkit?.messageHandlers?.openFileDialog?.postMessage({ callbackId });
+  });
 }
 
 /**

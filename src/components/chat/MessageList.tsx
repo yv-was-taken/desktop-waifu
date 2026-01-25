@@ -144,6 +144,7 @@ export function MessageList({ messages, isTyping, onEditAndRetry }: MessageListP
   const apiKey = useAppStore((state) => state.settings.apiKey);
   const fontSize = useAppStore((state) => state.settings.fontSize);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
 
@@ -230,6 +231,7 @@ export function MessageList({ messages, isTyping, onEditAndRetry }: MessageListP
       {messages.map((message) => {
         const isUser = message.role === 'user';
         const hasHtmlContent = !!message.htmlContent;
+        const hasImages = message.images && message.images.length > 0;
         const isEditing = editingId === message.id;
 
         return (
@@ -270,7 +272,7 @@ export function MessageList({ messages, isTyping, onEditAndRetry }: MessageListP
                   : 'bg-[#111111] text-white border-2 border-slate-600 [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%,0_8px)]'
               }`}
             >
-              {isEditing ? (
+{isEditing ? (
                 <div className="space-y-2">
                   <textarea
                     value={editContent}
@@ -301,25 +303,45 @@ export function MessageList({ messages, isTyping, onEditAndRetry }: MessageListP
                   </div>
                 </div>
               ) : (
-                <div className={`leading-relaxed break-words ${hasHtmlContent ? '' : 'prose prose-sm max-w-none prose-invert'}`} style={{ fontSize: `${fontSize ?? 14}px` }}>
-                  {hasHtmlContent ? (
-                    <div
-                      className="terminal-container"
-                      dangerouslySetInnerHTML={{ __html: message.htmlContent! }}
-                    />
-                  ) : (
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        code({ className, children, ...props }) {
-                          const match = /language-(\w+)/.exec(className || '');
-                          const isInline = !match && !className;
-                          return isInline ? (
-                            <code className={`${isUser ? 'bg-slate-700' : 'bg-slate-700'} px-1 py-0.5 rounded text-xs`} {...props}>
-                              {children}
-                            </code>
-                          ) : (
-                            <SyntaxHighlighter
+                <>
+                  {/* Image thumbnails */}
+                  {hasImages && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {message.images!.map((image) => (
+                        <button
+                          key={image.id}
+                          onClick={() => setExpandedImage(image.previewUrl)}
+                          className="block cursor-pointer hover:opacity-80 transition-opacity"
+                        >
+                          <img
+                            src={image.previewUrl}
+                            alt="Attached"
+                            className="h-20 w-20 object-cover border border-slate-500 rounded"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className={`leading-relaxed break-words ${hasHtmlContent ? '' : 'prose prose-sm max-w-none prose-invert'}`} style={{ fontSize: `${fontSize ?? 14}px` }}>
+                    {hasHtmlContent ? (
+                      <div
+                        className="terminal-container"
+                        dangerouslySetInnerHTML={{ __html: message.htmlContent! }}
+                      />
+                    ) : (
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          code({ className, children, ...props }) {
+                            const match = /language-(\w+)/.exec(className || '');
+                            const isInline = !match && !className;
+                            return isInline ? (
+                              <code className={`${isUser ? 'bg-slate-700' : 'bg-slate-700'} px-1 py-0.5 rounded text-xs`} {...props}>
+                                {children}
+                              </code>
+                            ) : (
+                              <SyntaxHighlighter
                               style={oneDark}
                               language={match?.[1] || 'text'}
                               PreTag="div"
@@ -364,6 +386,28 @@ export function MessageList({ messages, isTyping, onEditAndRetry }: MessageListP
               <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:150ms]" />
               <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:300ms]" />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expanded image modal */}
+      {expandedImage && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 cursor-pointer"
+          onClick={() => setExpandedImage(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh]">
+            <img
+              src={expandedImage}
+              alt="Expanded view"
+              className="max-w-full max-h-[90vh] object-contain"
+            />
+            <button
+              className="absolute top-2 right-2 w-8 h-8 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-black/70"
+              onClick={() => setExpandedImage(null)}
+            >
+              ×
+            </button>
           </div>
         </div>
       )}

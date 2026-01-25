@@ -11,7 +11,7 @@ import { debugLog } from '../../lib/debug';
 import { isSlashCommand, executeSlashCommand } from '../../lib/commands';
 import { characters } from '../../characters';
 import AnsiToHtml from 'ansi-to-html';
-import type { LLMMessage, SystemInfo } from '../../types';
+import type { LLMMessage, SystemInfo, ImageAttachment, LLMContentPart } from '../../types';
 
 interface ChatPanelProps {
   onClose?: () => void; // Optional close handler for overlay mode
@@ -170,6 +170,27 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     return null;
   }, []);
 
+/**
+   * Build LLM content from text and images
+   */
+  const buildLLMContent = useCallback((text: string, images?: ImageAttachment[]): string | LLMContentPart[] => {
+    if (!images || images.length === 0) {
+      return text;
+    }
+
+    // Build multimodal content with images first, then text
+    const parts: LLMContentPart[] = [
+      ...images.map((img): LLMContentPart => ({
+        type: 'image',
+        data: img.data,
+        mimeType: img.mimeType,
+      })),
+      { type: 'text', text },
+    ];
+
+    return parts;
+  }, []);
+
   const handleEditAndRetry = useCallback(async (messageId: string, newContent: string) => {
     if (!settings.apiKey) return;
 
@@ -241,7 +262,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     }
   }, [settings, systemInfo, parseExecuteTag, setGeneratedCommand, addMessage, setThinking, setExpression, updateMessage, truncateMessagesAfter]);
 
-  const handleSend = useCallback(async (content: string) => {
+  const handleSend = useCallback(async (content: string, images?: ImageAttachment[]) => {
     // Handle slash commands before anything else
     if (isSlashCommand(content)) {
       const result = executeSlashCommand(content, {
@@ -268,8 +289,8 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       return;
     }
 
-    // Add user message
-    addMessage({ role: 'user', content });
+    // Add user message with images
+    addMessage({ role: 'user', content, images });
 
     // Start thinking animation while waiting for LLM
     setThinking(true);
@@ -286,18 +307,22 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       }, systemInfo);
 
       // Build messages array with system prompt
+      // Include images from previous messages and the current message
       const llmMessages: LLMMessage[] = [
         { role: 'system', content: systemPrompt },
         ...messages.map((m) => ({
           role: m.role as 'user' | 'assistant',
-          content: m.content,
+          content: buildLLMContent(m.content, m.images),
         })),
-        { role: 'user', content },
+        { role: 'user', content: buildLLMContent(content, images) },
       ];
 
       debugLog(`[LLM] Sending ${llmMessages.length} messages to ${settings.llmProvider}/${settings.llmModel}`);
-      debugLog(`[LLM] System prompt length: ${llmMessages[0]?.content?.length || 0}`);
-      debugLog(`[LLM] System prompt includes EXECUTE instruction: ${llmMessages[0]?.content?.includes('[EXECUTE:') || false}`);
+      const systemContent = llmMessages[0]?.content;
+      const systemText = typeof systemContent === 'string' ? systemContent : '';
+      debugLog(`[LLM] System prompt length: ${systemText.length}`);
+      debugLog(`[LLM] System prompt includes EXECUTE instruction: ${systemText.includes('[EXECUTE:')}`);
+      debugLog(`[LLM] Message has images: ${!!images && images.length > 0}`);
 
       const config = {
         apiKey: settings.apiKey,
@@ -400,7 +425,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       });
       setExpression('sad');
     }
-  }, [settings, messages, addMessage, addStreamingMessage, updateMessageContent, setThinking, setExpression, systemInfo, parseExecuteTag, setGeneratedCommand]);
+}, [settings, messages, addMessage, addStreamingMessage, updateMessageContent, setThinking, setExpression, systemInfo, parseExecuteTag, setGeneratedCommand, buildLLMContent]);
 
   return (
     <div className="w-full h-full flex flex-col bg-slate-900/90 border border-slate-600">

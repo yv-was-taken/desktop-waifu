@@ -524,6 +524,9 @@ fn create_webview_with_handlers(
     // Register the "setInputRegion" message handler for click-through control
     content_manager.register_script_message_handler("setInputRegion", None);
 
+    // Register the "openFileDialog" message handler for native file picker
+    content_manager.register_script_message_handler("openFileDialog", None);
+
     // Register the "setHotkeyEnabled" message handler for hotkey enable/disable
     content_manager.register_script_message_handler("setHotkeyEnabled", None);
 
@@ -928,6 +931,124 @@ fn create_webview_with_handlers(
                         }
                     }
                 }
+            }
+        }
+    });
+
+// Set up openFileDialog handler for native file picker
+    let window_for_file = window.clone();
+    let webview_for_file = webview.clone();
+    content_manager.connect_script_message_received(Some("openFileDialog"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let callback_id = parsed["callbackId"].as_str().unwrap_or("").to_string();
+
+                if callback_id.is_empty() {
+                    return;
+                }
+
+                debug_log!("[FILE_DIALOG] Opening file dialog, callback_id={}", callback_id);
+
+                // Temporarily lower the overlay layer so file dialog appears on top
+                window_for_file.set_layer(Layer::Bottom);
+                debug_log!("[FILE_DIALOG] Lowered layer to Bottom");
+
+                // Create file filter for images
+                let filter = gtk4::FileFilter::new();
+                filter.set_name(Some("Images"));
+                filter.add_mime_type("image/png");
+                filter.add_mime_type("image/jpeg");
+                filter.add_mime_type("image/gif");
+                filter.add_mime_type("image/webp");
+
+                let filters = gio::ListStore::new::<gtk4::FileFilter>();
+                filters.append(&filter);
+
+                // Create file dialog
+                let dialog = gtk4::FileDialog::builder()
+                    .title("Select Image")
+                    .filters(&filters)
+                    .modal(true)
+                    .build();
+
+                let webview = webview_for_file.clone();
+                let callback_id_clone = callback_id.clone();
+                let window_for_dialog = window_for_file.clone();
+                let window_for_restore = window_for_file.clone();
+
+                dialog.open_multiple(
+                    Some(&window_for_dialog),
+                    None::<&gio::Cancellable>,
+                    move |result| {
+                        // Restore overlay layer
+                        window_for_restore.set_layer(Layer::Overlay);
+                        debug_log!("[FILE_DIALOG] Restored layer to Overlay");
+
+                        match result {
+                            Ok(files) => {
+                                let mut file_data: Vec<serde_json::Value> = Vec::new();
+
+                                for i in 0..files.n_items() {
+                                    if let Some(obj) = files.item(i) {
+                                        if let Ok(file) = obj.downcast::<gio::File>() {
+                                            if let Some(path) = file.path() {
+                                                // Read file contents
+                                                if let Ok(contents) = std::fs::read(&path) {
+                                                    // Determine MIME type from extension
+                                                    let mime_type = path.extension()
+                                                        .and_then(|ext| ext.to_str())
+                                                        .map(|ext| match ext.to_lowercase().as_str() {
+                                                            "png" => "image/png",
+                                                            "jpg" | "jpeg" => "image/jpeg",
+                                                            "gif" => "image/gif",
+                                                            "webp" => "image/webp",
+                                                            _ => "image/png",
+                                                        })
+                                                        .unwrap_or("image/png");
+
+                                                    // Base64 encode
+                                                    use base64::Engine;
+                                                    let base64_data = base64::engine::general_purpose::STANDARD.encode(&contents);
+
+                                                    // Get filename
+                                                    let filename = path.file_name()
+                                                        .and_then(|n| n.to_str())
+                                                        .unwrap_or("image")
+                                                        .to_string();
+
+                                                    file_data.push(serde_json::json!({
+                                                        "data": base64_data,
+                                                        "mimeType": mime_type,
+                                                        "filename": filename
+                                                    }));
+
+                                                    debug_log!("[FILE_DIALOG] Read file: {}, size={}, mime={}", filename, contents.len(), mime_type);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Send result to JavaScript
+                                let result_json = serde_json::to_string(&file_data).unwrap_or("[]".to_string());
+                                let js = format!(
+                                    r#"window.__commandCallbacks && window.__commandCallbacks['{}'] && window.__commandCallbacks['{}']({})"#,
+                                    callback_id_clone, callback_id_clone, result_json
+                                );
+                                webview.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
+                            }
+                            Err(e) => {
+                                // Dialog was cancelled or error occurred
+                                debug_log!("[FILE_DIALOG] Dialog cancelled or error: {}", e);
+                                let js = format!(
+                                    r#"window.__commandCallbacks && window.__commandCallbacks['{}'] && window.__commandCallbacks['{}'](null)"#,
+                                    callback_id_clone, callback_id_clone
+                                );
+                                webview.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
+                            }
+                        }
+                    },
+                );
             }
         }
     });
