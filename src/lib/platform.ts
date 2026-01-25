@@ -31,6 +31,8 @@ declare global {
         applyAnchoring?: { postMessage: (msg: { isRightHalf: boolean; isBottomHalf: boolean; horizontalMargin: number; verticalMargin: number }) => void };
         // Debug logging handler (debug.ts)
         debug?: { postMessage: (msg: { message: string }) => void };
+        // Hotkey enable/disable handler (SettingsModal.tsx)
+        setHotkeyEnabled?: { postMessage: (msg: { enabled: boolean }) => void };
         // File save handler (export.ts)
         saveFile?: { postMessage: (msg: { path: string; content: string; callbackId: string }) => void };
       };
@@ -137,6 +139,16 @@ export async function setInputRegion(x: number, y: number, width: number, height
 export async function clearInputRegion(): Promise<void> {
   if (isOverlayMode) {
     window.webkit?.messageHandlers?.setInputRegion?.postMessage({ mode: 'full' });
+  }
+}
+
+/**
+ * Set whether the Rust backend should respond to global hotkey IPC commands.
+ * This is a "soft" enable/disable that doesn't modify compositor config.
+ */
+export function setHotkeyEnabled(enabled: boolean): void {
+  if (isOverlayMode) {
+    window.webkit?.messageHandlers?.setHotkeyEnabled?.postMessage({ enabled });
   }
 }
 

@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '../../store';
 import { defaultModels } from '../../lib/llm';
 import { personalities } from '../../lib/personalities';
 import { characters } from '../../characters';
+import { executeCommand, setHotkeyEnabled, isOverlayMode } from '../../lib/platform';
 import type { LLMProviderType, PersonalityId, DetailLevel } from '../../types';
 
 export function SettingsModal() {
@@ -10,6 +11,89 @@ export function SettingsModal() {
   const updateSettings = useAppStore((state) => state.updateSettings);
   const toggleSettings = useAppStore((state) => state.toggleSettings);
   const setScaleSliderDragging = useAppStore((state) => state.setScaleSliderDragging);
+
+  // Hotkey setup state
+  const [hotkeyLoading, setHotkeyLoading] = useState(false);
+  const [hotkeyStatus, setHotkeyStatus] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
+
+  // Handle hotkey toggle with setup script
+  const handleHotkeyToggle = async () => {
+    if (!isOverlayMode) {
+      // In non-overlay mode, just toggle the setting
+      updateSettings({ hotkeyEnabled: !settings.hotkeyEnabled });
+      return;
+    }
+
+    const enabling = !settings.hotkeyEnabled;
+    setHotkeyStatus(null);
+
+    if (enabling) {
+      // Enabling: run setup script to configure compositor
+      setHotkeyLoading(true);
+      try {
+        // First check if binding already exists
+        const checkResult = await executeCommand('./scripts/setup-hotkey.sh --check --json');
+        let status: { status: string; message: string; compositor: string } | null = null;
+
+        try {
+          status = JSON.parse(checkResult.stdout.trim());
+        } catch {
+          // Script might not have JSON output, check exit code
+        }
+
+        if (status?.status === 'exists' || checkResult.exit_code === 0) {
+          // Already configured, just enable
+          setHotkeyEnabled(true);
+          updateSettings({ hotkeyEnabled: true });
+          setHotkeyStatus({ type: 'success', message: 'Hotkey already configured' });
+        } else if (status?.status === 'conflict' || checkResult.exit_code === 2) {
+          // Conflict detected
+          setHotkeyStatus({
+            type: 'error',
+            message: status?.message || 'Super+M is already bound to another action in your compositor'
+          });
+        } else {
+          // Not configured, run setup
+          const setupResult = await executeCommand('./scripts/setup-hotkey.sh --json');
+          let setupStatus: { status: string; message: string } | null = null;
+
+          try {
+            setupStatus = JSON.parse(setupResult.stdout.trim());
+          } catch {
+            // Fall back to exit code
+          }
+
+          if (setupStatus?.status === 'added' || setupStatus?.status === 'exists' || setupResult.exit_code === 0) {
+            setHotkeyEnabled(true);
+            updateSettings({ hotkeyEnabled: true });
+            setHotkeyStatus({ type: 'success', message: setupStatus?.message || 'Hotkey configured successfully' });
+          } else if (setupStatus?.status === 'conflict' || setupResult.exit_code === 2) {
+            setHotkeyStatus({
+              type: 'error',
+              message: setupStatus?.message || 'Super+M is already bound to another action'
+            });
+          } else {
+            setHotkeyStatus({
+              type: 'error',
+              message: setupStatus?.message || setupResult.stderr || 'Failed to configure hotkey'
+            });
+          }
+        }
+      } catch (err) {
+        setHotkeyStatus({
+          type: 'error',
+          message: err instanceof Error ? err.message : 'Failed to configure hotkey'
+        });
+      } finally {
+        setHotkeyLoading(false);
+      }
+    } else {
+      // Disabling: just tell Rust to ignore IPC commands
+      setHotkeyEnabled(false);
+      updateSettings({ hotkeyEnabled: false });
+      setHotkeyStatus({ type: 'warning', message: 'Hotkey disabled (binding remains in compositor config)' });
+    }
+  };
 
   // Track when scale slider drag ends (mouseup anywhere on document)
   useEffect(() => {
@@ -247,21 +331,48 @@ export function SettingsModal() {
             />
           </div>
 
-          {/* Always on Top */}
-          <div className="flex items-center justify-between">
-            <label className="text-sm text-gray-300">Always on Top</label>
-            <button
-              onClick={() => updateSettings({ alwaysOnTop: !settings.alwaysOnTop })}
-              className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.alwaysOnTop ? 'bg-teal-400' : 'bg-gray-600'
-              }`}
-            >
-              <span
-                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                  settings.alwaysOnTop ? 'translate-x-7' : 'translate-x-1'
+          {/* Global Hotkey */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-sm text-gray-300">Global Hotkey</label>
+                <p className="text-xs text-gray-500">Super+M to toggle overlay</p>
+              </div>
+              <button
+                onClick={handleHotkeyToggle}
+                disabled={hotkeyLoading}
+                className={`relative w-12 h-6 rounded-full transition-colors ${
+                  hotkeyLoading ? 'bg-gray-500 cursor-wait' :
+                  settings.hotkeyEnabled ? 'bg-teal-400' : 'bg-gray-600'
                 }`}
-              />
-            </button>
+              >
+                {hotkeyLoading ? (
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  </span>
+                ) : (
+                  <span
+                    className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                      settings.hotkeyEnabled ? 'translate-x-6' : 'translate-x-0'
+                    }`}
+                  />
+                )}
+              </button>
+            </div>
+            {hotkeyStatus && (
+              <p className={`text-xs ${
+                hotkeyStatus.type === 'success' ? 'text-green-400' :
+                hotkeyStatus.type === 'error' ? 'text-red-400' :
+                'text-yellow-400'
+              }`}>
+                {hotkeyStatus.message}
+              </p>
+            )}
+            <p className="text-xs text-gray-500 italic">
+              Enabling adds a keybinding to your compositor config.
+              Disabling stops the app from responding but leaves the binding intact.
+              Manually editing your compositor config while enabled may cause issues.
+            </p>
           </div>
 
           {/* Data Section Divider */}
