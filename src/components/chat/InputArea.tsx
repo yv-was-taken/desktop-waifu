@@ -240,7 +240,7 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
         <button
           onClick={handleAttachClick}
           disabled={disabled}
-          className="bg-slate-700 text-white border border-slate-600 px-3 py-3 hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-slate-700 text-white border border-slate-600 px-3 py-3 hover:bg-slate-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           title="Attach image"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
