@@ -484,6 +484,28 @@ fn create_webview_with_handlers(
     let _ = std::fs::create_dir_all(&data_dir);
     let _ = std::fs::create_dir_all(&cache_dir);
 
+    // Check if version changed and clear WebKit cache if so
+    // This ensures users get the latest frontend after package updates
+    let version_file = data_dir.join("version");
+    let current_version = env!("CARGO_PKG_VERSION");
+    let stored_version = std::fs::read_to_string(&version_file).unwrap_or_default();
+
+    if stored_version.trim() != current_version {
+        info!("Version changed from '{}' to '{}', clearing WebKit cache", stored_version.trim(), current_version);
+        // Clear the cache directory
+        if cache_dir.exists() {
+            if let Err(e) = std::fs::remove_dir_all(&cache_dir) {
+                info!("Failed to clear cache directory: {}", e);
+            } else {
+                info!("WebKit cache cleared successfully");
+            }
+        }
+        // Recreate cache directory
+        let _ = std::fs::create_dir_all(&cache_dir);
+        // Update stored version
+        let _ = std::fs::write(&version_file, current_version);
+    }
+
     let data_dir_str = data_dir.to_str().unwrap_or("/tmp/desktop-waifu");
     let cache_dir_str = cache_dir.to_str().unwrap_or("/tmp/desktop-waifu-cache");
 

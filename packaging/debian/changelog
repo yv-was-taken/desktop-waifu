@@ -1,3 +1,12 @@
+desktop-waifu (0.2.1-1) unstable; urgency=medium
+
+  * Bug fixes:
+  * Auto-clear WebKit cache on version upgrade to ensure latest frontend
+  * Fix hotkey setup script path for installed packages
+  * Install setup-hotkey.sh script in package
+
+ -- yv-was-taken <yvmail@proton.me>  Sun, 25 Jan 2026 01:06:41 -0600
+
 desktop-waifu (0.2.0-1) unstable; urgency=medium
 
   * New features in this release:

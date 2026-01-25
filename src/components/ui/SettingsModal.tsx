@@ -6,6 +6,11 @@ import { characters } from '../../characters';
 import { executeCommand, setHotkeyEnabled, isOverlayMode } from '../../lib/platform';
 import type { LLMProviderType, PersonalityId, DetailLevel, NotificationPreference } from '../../types';
 
+// Script path varies between dev and production
+const HOTKEY_SCRIPT = import.meta.env.PROD
+  ? '/usr/share/desktop-waifu/scripts/setup-hotkey.sh'
+  : './scripts/setup-hotkey.sh';
+
 export function SettingsModal() {
   const settings = useAppStore((state) => state.settings);
   const updateSettings = useAppStore((state) => state.updateSettings);
@@ -32,7 +37,7 @@ export function SettingsModal() {
       setHotkeyLoading(true);
       try {
         // First check if binding already exists
-        const checkResult = await executeCommand('./scripts/setup-hotkey.sh --check --json');
+        const checkResult = await executeCommand(`${HOTKEY_SCRIPT} --check --json`);
         let status: { status: string; message: string; compositor: string } | null = null;
 
         try {
@@ -54,7 +59,7 @@ export function SettingsModal() {
           });
         } else {
           // Not configured, run setup
-          const setupResult = await executeCommand('./scripts/setup-hotkey.sh --json');
+          const setupResult = await executeCommand(`${HOTKEY_SCRIPT} --json`);
           let setupStatus: { status: string; message: string } | null = null;
 
           try {
