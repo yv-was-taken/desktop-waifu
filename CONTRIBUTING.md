@@ -14,11 +14,13 @@ Thank you for your interest in contributing to Desktop Waifu! This document prov
 ### Pull Requests
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
+2. Create a feature branch from `development` (`git checkout -b feature/your-feature development`)
 3. Make your changes
 4. Test your changes thoroughly
 5. Commit with clear, descriptive messages
-6. Push to your fork and submit a pull request
+6. Push to your fork and submit a pull request targeting `development`
+
+**Note:** The `development` branch is used for active development. Changes are merged to `master` for stable releases.
 
 ## Development Setup
 

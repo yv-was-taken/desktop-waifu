@@ -3,6 +3,8 @@ import { CharacterCanvas } from './components/character';
 import { ChatPanel } from './components/chat';
 import { SettingsModal, TitleBar } from './components/ui';
 import { useAppStore } from './store';
+import { setHotkeyEnabled } from './lib/platform';
+import { debugLog } from './lib/debug';
 
 // Check if we're in overlay mode (desktop pet mode)
 // Window interface types are declared in src/lib/platform.ts
@@ -123,6 +125,33 @@ function OverlayMode() {
     return () => window.removeEventListener('trayShow', handleTrayShow);
   }, [setHiding]);
 
+  // Handle "hotkeyShow" event from Rust when user presses global hotkey to show
+  const hotkeyEnabled = useAppStore((state) => state.settings.hotkeyEnabled) ?? false;
+  useEffect(() => {
+    const handleHotkeyShow = () => {
+      debugLog(`[HOTKEY] hotkeyShow event received, hotkeyEnabled=${hotkeyEnabled}`);
+      if (!hotkeyEnabled) {
+        debugLog('[HOTKEY] Hotkey disabled in settings, ignoring hotkeyShow');
+        return;
+      }
+      debugLog('[HOTKEY] Processing hotkeyShow - showing overlay and opening chat');
+      // Reset hiding state - this will trigger the "show" animation
+      setHiding(false);
+      // Open chat panel and focus input
+      setChatPanelOpen(true);
+    };
+
+    debugLog(`[HOTKEY] Registering hotkeyShow listener, hotkeyEnabled=${hotkeyEnabled}`);
+    window.addEventListener('hotkeyShow', handleHotkeyShow);
+    return () => window.removeEventListener('hotkeyShow', handleHotkeyShow);
+  }, [setHiding, setChatPanelOpen, hotkeyEnabled]);
+
+  // Sync hotkey enabled state with Rust backend
+  useEffect(() => {
+    debugLog(`[HOTKEY] Syncing hotkeyEnabled=${hotkeyEnabled} to Rust backend`);
+    setHotkeyEnabled(hotkeyEnabled);
+  }, [hotkeyEnabled]);
+
   // Handle initial state from Rust (position + quadrant + screen dimensions)
   useEffect(() => {
     const handleInitialState = (e: Event) => {
@@ -223,6 +252,25 @@ function OverlayMode() {
       sendWindowControlMessage({ action: 'hide' });
     }, 800);
   }, [setChatPanelOpen, setHiding]);
+
+  // Handle "hotkeyHide" event from Rust when user presses global hotkey to hide
+  // This triggers the same animation sequence as double-clicking the character
+  useEffect(() => {
+    const handleHotkeyHide = () => {
+      debugLog(`[HOTKEY] hotkeyHide event received, hotkeyEnabled=${hotkeyEnabled}`);
+      if (!hotkeyEnabled) {
+        debugLog('[HOTKEY] Hotkey disabled in settings, ignoring hotkeyHide');
+        return;
+      }
+      debugLog('[HOTKEY] Processing hotkeyHide - triggering hide sequence');
+      // Trigger hide sequence (same as double-click)
+      triggerHide();
+    };
+
+    debugLog(`[HOTKEY] Registering hotkeyHide listener, hotkeyEnabled=${hotkeyEnabled}`);
+    window.addEventListener('hotkeyHide', handleHotkeyHide);
+    return () => window.removeEventListener('hotkeyHide', handleHotkeyHide);
+  }, [hotkeyEnabled, triggerHide]);
 
   // Throttled send using requestAnimationFrame
   const sendThrottledUpdate = useCallback(() => {

@@ -2,8 +2,27 @@ mod ipc;
 mod server;
 mod tray;
 
+use clap::Parser;
+
 // Debug logging flag - set to true to enable debug output to terminal
 const DEBUG_LOGGING: bool = false;
+
+/// Desktop Waifu overlay - Animated 3D VRM characters for your desktop
+#[derive(Parser)]
+#[command(name = "desktop-waifu-overlay", version, about)]
+struct Cli {
+    /// Toggle overlay visibility (send command to running instance)
+    #[arg(long)]
+    toggle: bool,
+
+    /// Show overlay (send command to running instance)
+    #[arg(long)]
+    show: bool,
+
+    /// Hide overlay (send command to running instance)
+    #[arg(long)]
+    hide: bool,
+}
 
 // Helper macro for conditional debug logging
 macro_rules! debug_log {
@@ -26,7 +45,7 @@ use std::time::Duration;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 use webkit6::prelude::*;
-use webkit6::{Settings as WebViewSettings, UserContentManager, WebView};
+use webkit6::{NetworkSession, Settings as WebViewSettings, UserContentManager, WebView};
 
 use tray::{spawn_tray, update_tray_visibility, TrayMessage};
 
@@ -84,6 +103,32 @@ fn get_screen_dimensions(window: &ApplicationWindow) -> Option<(i32, i32)> {
 }
 
 fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    // Handle CLI commands (client mode) - send to running instance and exit
+    if cli.toggle {
+        eprintln!("[CLI] Sending toggle command via IPC socket...");
+        match ipc::send_command("toggle") {
+            Ok(()) => {
+                eprintln!("[CLI] Toggle command sent successfully");
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("[CLI] Failed to send toggle: {}", e);
+                return Err(anyhow::anyhow!("Failed to send toggle: {}. Is desktop-waifu running?", e));
+            }
+        }
+    }
+    if cli.show {
+        return ipc::send_command("show")
+            .map_err(|e| anyhow::anyhow!("Failed to send show: {}. Is desktop-waifu running?", e));
+    }
+    if cli.hide {
+        return ipc::send_command("hide")
+            .map_err(|e| anyhow::anyhow!("Failed to send hide: {}. Is desktop-waifu running?", e));
+    }
+
+    // Normal startup (server mode) - continue with GUI
     // Initialize logging
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::DEBUG)
@@ -229,8 +274,11 @@ fn build_ui(app: &Application, webview_url: &str) {
         }
     };
 
+    // Track visibility state (shared between tray, IPC, and windowControl handlers)
+    let is_visible = Rc::new(RefCell::new(true));
+
     // Create WebView with message handler for drag events and window control
-    let webview = create_webview_with_handlers(&window, position, drag_state, quadrant, tray_handle.clone());
+    let webview = create_webview_with_handlers(&window, position, drag_state, quadrant, tray_handle.clone(), is_visible.clone());
 
     // Add WebView to window
     window.set_child(Some(&webview));
@@ -245,11 +293,27 @@ fn build_ui(app: &Application, webview_url: &str) {
         webview_for_focus.grab_focus();
     });
 
+    // Track hotkey enabled state (controlled by frontend settings)
+    let hotkey_enabled = Rc::new(RefCell::new(false));
+
+    // Set up hotkey enabled handler (frontend tells us when setting changes)
+    let hotkey_enabled_for_handler = hotkey_enabled.clone();
+    content_manager.connect_script_message_received(Some("setHotkeyEnabled"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let enabled = parsed["enabled"].as_bool().unwrap_or(false);
+                *hotkey_enabled_for_handler.borrow_mut() = enabled;
+                debug_log!("[HOTKEY] Hotkey enabled set to: {}", enabled);
+            }
+        }
+    });
+
     // Set up tray message handler on GTK main loop
     if let Some(receiver) = tray_receiver {
         let window_for_tray = window.clone();
         let webview_for_tray = webview.clone();
         let tray_handle_for_update = tray_handle.clone();
+        let is_visible_for_tray = is_visible.clone();
 
         // Poll for tray messages every 100ms
         glib::timeout_add_local(Duration::from_millis(100), move || {
@@ -257,6 +321,7 @@ fn build_ui(app: &Application, webview_url: &str) {
                 match msg {
                     TrayMessage::Show => {
                         window_for_tray.present();
+                        *is_visible_for_tray.borrow_mut() = true;
                         webview_for_tray.evaluate_javascript(
                             "window.dispatchEvent(new CustomEvent('trayShow'))",
                             None,
@@ -270,6 +335,7 @@ fn build_ui(app: &Application, webview_url: &str) {
                     }
                     TrayMessage::Hide => {
                         window_for_tray.hide();
+                        *is_visible_for_tray.borrow_mut() = false;
                         if let Some(ref handle) = tray_handle_for_update {
                             update_tray_visibility(handle, false);
                         }
@@ -283,6 +349,94 @@ fn build_ui(app: &Application, webview_url: &str) {
             glib::ControlFlow::Continue
         });
     }
+
+    // Spawn IPC socket listener for CLI commands (--toggle, --show, --hide)
+    let ipc_receiver = ipc::spawn_socket_listener();
+
+    // Poll for IPC messages every 50ms
+    let window_for_ipc = window.clone();
+    let webview_for_ipc = webview.clone();
+    let is_visible_for_ipc = is_visible.clone();
+    let tray_handle_for_ipc = tray_handle.clone();
+    let hotkey_enabled_for_ipc = hotkey_enabled.clone();
+
+    glib::timeout_add_local(Duration::from_millis(50), move || {
+        while let Ok(cmd) = ipc_receiver.try_recv() {
+            debug_log!("[IPC] Received command from socket: '{}'", cmd);
+
+            // Check if hotkey is enabled before processing commands
+            let hotkey_state = *hotkey_enabled_for_ipc.borrow();
+            debug_log!("[IPC] Hotkey enabled state: {}", hotkey_state);
+            if !hotkey_state {
+                debug_log!("[IPC] Hotkey disabled, ignoring command: {}", cmd);
+                continue;
+            }
+
+            match cmd.as_str() {
+                "toggle" => {
+                    let visible = *is_visible_for_ipc.borrow();
+                    debug_log!("[IPC] Toggle command - current visibility: {}", visible);
+                    if visible {
+                        debug_log!("[IPC] Dispatching hotkeyHide event to frontend");
+                        // Dispatch hotkeyHide to frontend - triggers animation, then frontend tells us to hide
+                        webview_for_ipc.evaluate_javascript(
+                            "window.dispatchEvent(new CustomEvent('hotkeyHide'))",
+                            None,
+                            None,
+                            None::<&gio::Cancellable>,
+                            |_| {},
+                        );
+                        // Note: is_visible will be set to false when frontend sends windowControl hide
+                    } else {
+                        debug_log!("[IPC] Showing window and dispatching hotkeyShow event");
+                        window_for_ipc.present();
+                        *is_visible_for_ipc.borrow_mut() = true;
+                        // Dispatch hotkeyShow - opens chat + focuses input
+                        webview_for_ipc.evaluate_javascript(
+                            "window.dispatchEvent(new CustomEvent('hotkeyShow'))",
+                            None,
+                            None,
+                            None::<&gio::Cancellable>,
+                            |_| {},
+                        );
+                        if let Some(ref h) = tray_handle_for_ipc {
+                            update_tray_visibility(h, true);
+                        }
+                    }
+                }
+                "show" => {
+                    if !*is_visible_for_ipc.borrow() {
+                        window_for_ipc.present();
+                        *is_visible_for_ipc.borrow_mut() = true;
+                        webview_for_ipc.evaluate_javascript(
+                            "window.dispatchEvent(new CustomEvent('hotkeyShow'))",
+                            None,
+                            None,
+                            None::<&gio::Cancellable>,
+                            |_| {},
+                        );
+                        if let Some(ref h) = tray_handle_for_ipc {
+                            update_tray_visibility(h, true);
+                        }
+                    }
+                }
+                "hide" => {
+                    if *is_visible_for_ipc.borrow() {
+                        // Dispatch hotkeyHide to frontend - triggers animation
+                        webview_for_ipc.evaluate_javascript(
+                            "window.dispatchEvent(new CustomEvent('hotkeyHide'))",
+                            None,
+                            None,
+                            None::<&gio::Cancellable>,
+                            |_| {},
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        glib::ControlFlow::Continue
+    });
 
     // Load the webview URL (dev server or static file server)
     webview.load_uri(webview_url);
@@ -319,7 +473,22 @@ fn create_webview_with_handlers(
     drag_state: Rc<RefCell<DragState>>,
     quadrant: Rc<RefCell<Quadrant>>,
     tray_handle: Option<ksni::Handle<tray::DesktopWaifuTray>>,
+    is_visible: Rc<RefCell<bool>>,
 ) -> WebView {
+    // Set up persistent storage for localStorage/cookies
+    // This ensures API keys and settings are preserved across sessions
+    let data_dir = glib::user_data_dir().join("desktop-waifu");
+    let cache_dir = glib::user_cache_dir().join("desktop-waifu");
+
+    // Create directories if they don't exist
+    let _ = std::fs::create_dir_all(&data_dir);
+    let _ = std::fs::create_dir_all(&cache_dir);
+
+    let data_dir_str = data_dir.to_str().unwrap_or("/tmp/desktop-waifu");
+    let cache_dir_str = cache_dir.to_str().unwrap_or("/tmp/desktop-waifu-cache");
+
+    let network_session = NetworkSession::new(Some(data_dir_str), Some(cache_dir_str));
+
     // Create WebView settings
     let settings = WebViewSettings::new();
 
@@ -369,9 +538,19 @@ fn create_webview_with_handlers(
     // Register the "showNotification" message handler for desktop notifications
     content_manager.register_script_message_handler("showNotification", None);
 
+    // Register the "openFileDialog" message handler for native file picker
+    content_manager.register_script_message_handler("openFileDialog", None);
+
+    // Register the "setHotkeyEnabled" message handler for hotkey enable/disable
+    content_manager.register_script_message_handler("setHotkeyEnabled", None);
+
+    // Register the "saveFile" message handler for file export
+    content_manager.register_script_message_handler("saveFile", None);
+
 
     // Clone window for windowControl handler
     let window_for_control = window.clone();
+    let is_visible_for_control = is_visible.clone();
 
     // Connect to the script-message-received signal for window control (hide/show)
     content_manager.connect_script_message_received(Some("windowControl"), move |_manager, js_value| {
@@ -381,18 +560,23 @@ fn create_webview_with_handlers(
 
                 match action {
                     "hide" => {
-                        // Wait for the hide animation to complete (800ms), then hide window
+                        debug_log!("[WINDOW_CONTROL] Hide requested");
                         let win = window_for_control.clone();
                         let handle = tray_handle.clone();
-                        glib::timeout_add_local_once(Duration::from_millis(800), move || {
-                            win.hide();
-                            if let Some(ref h) = handle {
-                                update_tray_visibility(h, false);
-                            }
-                        });
+                        let is_vis = is_visible_for_control.clone();
+                        // Hide window immediately (animation already completed in frontend)
+                        win.hide();
+                        *is_vis.borrow_mut() = false;
+                        debug_log!("[WINDOW_CONTROL] Window hidden, is_visible set to false");
+                        if let Some(ref h) = handle {
+                            update_tray_visibility(h, false);
+                        }
                     }
                     "show" => {
+                        debug_log!("[WINDOW_CONTROL] Show requested");
                         window_for_control.present();
+                        *is_visible_for_control.borrow_mut() = true;
+                        debug_log!("[WINDOW_CONTROL] Window shown, is_visible set to true");
                         if let Some(ref handle) = tray_handle {
                             update_tray_visibility(handle, true);
                         }
@@ -441,10 +625,11 @@ fn create_webview_with_handlers(
         }
     });
 
-    // Create WebView with the content manager (before connecting handlers that need webview)
+    // Create WebView with the content manager and persistent storage
     let webview = WebView::builder()
         .settings(&settings)
         .user_content_manager(&content_manager)
+        .network_session(&network_session)
         .build();
 
     // Make WebView background transparent (RGBA with 0 alpha)
@@ -764,7 +949,7 @@ fn create_webview_with_handlers(
         }
     });
 
-    // Set up showNotification handler for desktop notifications
+// Set up showNotification handler for desktop notifications
     content_manager.connect_script_message_received(Some("showNotification"), move |_manager, js_value| {
         if let Some(json_str) = js_value.to_json(0) {
             if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
@@ -782,6 +967,187 @@ fn create_webview_with_handlers(
                 {
                     tracing::warn!("Failed to show notification: {}", e);
                 }
+            }
+        }
+    });
+
+    // Set up openFileDialog handler for native file picker
+    let window_for_file = window.clone();
+    let webview_for_file = webview.clone();
+    content_manager.connect_script_message_received(Some("openFileDialog"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let callback_id = parsed["callbackId"].as_str().unwrap_or("").to_string();
+
+                if callback_id.is_empty() {
+                    return;
+                }
+
+                debug_log!("[FILE_DIALOG] Opening file dialog, callback_id={}", callback_id);
+
+                // Temporarily lower the overlay layer so file dialog appears on top
+                window_for_file.set_layer(Layer::Bottom);
+                debug_log!("[FILE_DIALOG] Lowered layer to Bottom");
+
+                // Create file filter for images
+                let filter = gtk4::FileFilter::new();
+                filter.set_name(Some("Images"));
+                filter.add_mime_type("image/png");
+                filter.add_mime_type("image/jpeg");
+                filter.add_mime_type("image/gif");
+                filter.add_mime_type("image/webp");
+
+                let filters = gio::ListStore::new::<gtk4::FileFilter>();
+                filters.append(&filter);
+
+                // Create file dialog
+                let dialog = gtk4::FileDialog::builder()
+                    .title("Select Image")
+                    .filters(&filters)
+                    .modal(true)
+                    .build();
+
+                let webview = webview_for_file.clone();
+                let callback_id_clone = callback_id.clone();
+                let window_for_dialog = window_for_file.clone();
+                let window_for_restore = window_for_file.clone();
+
+                dialog.open_multiple(
+                    Some(&window_for_dialog),
+                    None::<&gio::Cancellable>,
+                    move |result| {
+                        // Restore overlay layer
+                        window_for_restore.set_layer(Layer::Overlay);
+                        debug_log!("[FILE_DIALOG] Restored layer to Overlay");
+
+                        match result {
+                            Ok(files) => {
+                                let mut file_data: Vec<serde_json::Value> = Vec::new();
+
+                                for i in 0..files.n_items() {
+                                    if let Some(obj) = files.item(i) {
+                                        if let Ok(file) = obj.downcast::<gio::File>() {
+                                            if let Some(path) = file.path() {
+                                                // Read file contents
+                                                if let Ok(contents) = std::fs::read(&path) {
+                                                    // Determine MIME type from extension
+                                                    let mime_type = path.extension()
+                                                        .and_then(|ext| ext.to_str())
+                                                        .map(|ext| match ext.to_lowercase().as_str() {
+                                                            "png" => "image/png",
+                                                            "jpg" | "jpeg" => "image/jpeg",
+                                                            "gif" => "image/gif",
+                                                            "webp" => "image/webp",
+                                                            _ => "image/png",
+                                                        })
+                                                        .unwrap_or("image/png");
+
+                                                    // Base64 encode
+                                                    use base64::Engine;
+                                                    let base64_data = base64::engine::general_purpose::STANDARD.encode(&contents);
+
+                                                    // Get filename
+                                                    let filename = path.file_name()
+                                                        .and_then(|n| n.to_str())
+                                                        .unwrap_or("image")
+                                                        .to_string();
+
+                                                    file_data.push(serde_json::json!({
+                                                        "data": base64_data,
+                                                        "mimeType": mime_type,
+                                                        "filename": filename
+                                                    }));
+
+                                                    debug_log!("[FILE_DIALOG] Read file: {}, size={}, mime={}", filename, contents.len(), mime_type);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Send result to JavaScript
+                                let result_json = serde_json::to_string(&file_data).unwrap_or("[]".to_string());
+                                let js = format!(
+                                    r#"window.__commandCallbacks && window.__commandCallbacks['{}'] && window.__commandCallbacks['{}']({})"#,
+                                    callback_id_clone, callback_id_clone, result_json
+                                );
+                                webview.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
+                            }
+                            Err(e) => {
+                                // Dialog was cancelled or error occurred
+                                debug_log!("[FILE_DIALOG] Dialog cancelled or error: {}", e);
+                                let js = format!(
+                                    r#"window.__commandCallbacks && window.__commandCallbacks['{}'] && window.__commandCallbacks['{}'](null)"#,
+                                    callback_id_clone, callback_id_clone
+                                );
+                                webview.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
+                            }
+                        }
+                    },
+                );
+            }
+        }
+    });
+
+    // Set up saveFile handler for exporting conversations
+    let webview_for_save = webview.clone();
+    content_manager.connect_script_message_received(Some("saveFile"), move |_manager, js_value| {
+        if let Some(json_str) = js_value.to_json(0) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str.as_str()) {
+                let path = parsed["path"].as_str().unwrap_or("").to_string();
+                let content = parsed["content"].as_str().unwrap_or("").to_string();
+                let callback_id = parsed["callbackId"].as_str().unwrap_or("").to_string();
+
+                if path.is_empty() {
+                    return;
+                }
+
+                let (tx, rx) = std::sync::mpsc::channel::<String>();
+
+                std::thread::spawn(move || {
+                    // Expand ~ to home directory
+                    let expanded_path = if path.starts_with("~/") {
+                        if let Ok(home) = std::env::var("HOME") {
+                            path.replacen("~", &home, 1)
+                        } else {
+                            path.clone()
+                        }
+                    } else {
+                        path.clone()
+                    };
+
+                    // Create parent directories if needed
+                    if let Some(parent) = std::path::Path::new(&expanded_path).parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+
+                    // Write file
+                    let result = std::fs::write(&expanded_path, &content);
+                    let (success, error) = match result {
+                        Ok(_) => (true, String::new()),
+                        Err(e) => (false, e.to_string()),
+                    };
+
+                    let error_escaped = error.replace('\\', "\\\\").replace('`', "\\`");
+                    let js = format!(
+                        r#"window.__commandCallbacks && window.__commandCallbacks['{}'] && window.__commandCallbacks['{}']( {{ success: {}, error: `{}` }} )"#,
+                        callback_id, callback_id, success, error_escaped
+                    );
+                    let _ = tx.send(js);
+                });
+
+                // Poll for result on main thread
+                let webview = webview_for_save.clone();
+                glib::timeout_add_local(Duration::from_millis(10), move || {
+                    match rx.try_recv() {
+                        Ok(js) => {
+                            webview.evaluate_javascript(&js, None, None, None::<&gio::Cancellable>, |_| {});
+                            glib::ControlFlow::Break
+                        }
+                        Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+                    }
+                });
             }
         }
     });

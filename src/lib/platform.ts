@@ -33,6 +33,12 @@ declare global {
         debug?: { postMessage: (msg: { message: string }) => void };
         // Desktop notification handler (platform.ts)
         showNotification?: { postMessage: (msg: { title: string; body: string }) => void };
+        // Native file dialog handler (overlay mode only)
+        openFileDialog?: { postMessage: (msg: { callbackId: string }) => void };
+        // Hotkey enable/disable handler (SettingsModal.tsx)
+        setHotkeyEnabled?: { postMessage: (msg: { enabled: boolean }) => void };
+        // File save handler (export.ts)
+        saveFile?: { postMessage: (msg: { path: string; content: string; callbackId: string }) => void };
       };
     };
   }
@@ -170,4 +176,90 @@ export function isWindowCurrentlyFocused(): boolean {
     message: `[FOCUS] isWindowCurrentlyFocused: __desktopWaifuWindowFocused=${focused}`
   });
   return focused ?? true;
+}
+
+/**
+ * File data returned from the native file dialog.
+ */
+export interface FileDialogResult {
+  data: string;      // Base64-encoded file contents
+  mimeType: string;  // MIME type (e.g., "image/png")
+  filename: string;  // Original filename
+}
+
+/**
+ * Open a native file dialog for selecting images (overlay mode only).
+ * Returns null if not in overlay mode or if dialog was cancelled.
+ * Uses GTK4's FileDialog API which properly integrates with Wayland.
+ */
+export async function openFileDialog(): Promise<FileDialogResult[] | null> {
+  if (!isOverlayMode) {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    const callbackId = generateCallbackId();
+
+    window.__commandCallbacks![callbackId] = (result: unknown) => {
+      delete window.__commandCallbacks![callbackId];
+      resolve(result as FileDialogResult[] | null);
+    };
+
+    // Set timeout (30 seconds - file selection can take a while)
+    setTimeout(() => {
+      if (window.__commandCallbacks![callbackId]) {
+        delete window.__commandCallbacks![callbackId];
+        resolve(null);
+      }
+    }, 30000);
+
+    window.webkit?.messageHandlers?.openFileDialog?.postMessage({ callbackId });
+  });
+}
+
+/**
+ * Set whether the Rust backend should respond to global hotkey IPC commands.
+ * This is a "soft" enable/disable that doesn't modify compositor config.
+ */
+export function setHotkeyEnabled(enabled: boolean): void {
+  if (isOverlayMode) {
+    window.webkit?.messageHandlers?.setHotkeyEnabled?.postMessage({ enabled });
+  }
+}
+
+/**
+ * Result of a saveFile operation.
+ */
+export interface SaveFileResult {
+  success: boolean;
+  error: string;
+}
+
+/**
+ * Save content to a file at the specified path.
+ * Uses WebKit message handlers in overlay mode.
+ */
+export async function saveFile(path: string, content: string): Promise<SaveFileResult> {
+  if (isOverlayMode) {
+    return new Promise((resolve, reject) => {
+      const callbackId = generateCallbackId();
+
+      window.__commandCallbacks![callbackId] = (result: unknown) => {
+        delete window.__commandCallbacks![callbackId];
+        resolve(result as SaveFileResult);
+      };
+
+      setTimeout(() => {
+        if (window.__commandCallbacks![callbackId]) {
+          delete window.__commandCallbacks![callbackId];
+          reject(new Error('Save file timed out'));
+        }
+      }, 10000);
+
+      window.webkit?.messageHandlers?.saveFile?.postMessage({ path, content, callbackId });
+    });
+  } else {
+    // Tauri mode fallback (not currently used)
+    return { success: false, error: 'Not implemented' };
+  }
 }

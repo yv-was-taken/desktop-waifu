@@ -5,10 +5,13 @@ import { CommandApproval } from './CommandApproval';
 import { useAppStore } from '../../store';
 import { getProvider } from '../../lib/llm';
 import { buildSystemPrompt } from '../../lib/personalities';
-import { executeCommand as platformExecuteCommand, getSystemInfo, showDesktopNotification, isWindowCurrentlyFocused } from '../../lib/platform';
+import { executeCommand as platformExecuteCommand, getSystemInfo, saveFile, showDesktopNotification, isWindowCurrentlyFocused } from '../../lib/platform';
+import { exportToJSON, exportToMarkdown } from '../../lib/export';
 import { debugLog } from '../../lib/debug';
+import { isSlashCommand, executeSlashCommand } from '../../lib/commands';
+import { characters } from '../../characters';
 import AnsiToHtml from 'ansi-to-html';
-import type { LLMMessage, SystemInfo } from '../../types';
+import type { LLMMessage, SystemInfo, ImageAttachment, LLMContentPart } from '../../types';
 
 interface ChatPanelProps {
   onClose?: () => void; // Optional close handler for overlay mode
@@ -23,13 +26,21 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   const isThinking = useAppStore((state) => state.chat.isThinking);
   const settings = useAppStore((state) => state.settings);
   const addMessage = useAppStore((state) => state.addMessage);
+  const addStreamingMessage = useAppStore((state) => state.addStreamingMessage);
+  const updateMessageContent = useAppStore((state) => state.updateMessageContent);
   const setThinking = useAppStore((state) => state.setThinking);
   const setExpression = useAppStore((state) => state.setExpression);
   const toggleSettings = useAppStore((state) => state.toggleSettings);
   const clearMessages = useAppStore((state) => state.clearMessages);
+  const updateMessage = useAppStore((state) => state.updateMessage);
+  const truncateMessagesAfter = useAppStore((state) => state.truncateMessagesAfter);
 
   // System info for command execution context
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+
+  // Export menu state
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportNotification, setExportNotification] = useState<string | null>(null);
 
   // ANSI to HTML converter
   const ansiConverter = useMemo(() => new AnsiToHtml({
@@ -51,6 +62,46 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       .then(setSystemInfo)
       .catch((err) => console.error('Failed to get system info:', err));
   }, []);
+
+  // Close export menu when clicking outside
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handleClickOutside = () => setShowExportMenu(false);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showExportMenu]);
+
+  // Handle export action
+  const handleExport = useCallback(async (format: 'json' | 'markdown') => {
+    setShowExportMenu(false);
+
+    const content = format === 'json' ? exportToJSON(messages) : exportToMarkdown(messages);
+    const extension = format === 'json' ? 'json' : 'md';
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const hours = now.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    const time = `${hours12}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${ampm}`;
+    const timestamp = `${date}_${time}`;
+    const filename = `conversation-${timestamp}.${extension}`;
+    const fullPath = `${settings.exportPath}/${filename}`;
+
+    try {
+      const result = await saveFile(fullPath, content);
+      if (!result.success) {
+        setExportNotification(`Export failed: ${result.error}`);
+      } else {
+        setExportNotification(`Saved to ${fullPath}`);
+      }
+    } catch (error) {
+      setExportNotification(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    // Clear notification after 3 seconds
+    setTimeout(() => setExportNotification(null), 3000);
+  }, [messages, settings.exportPath]);
 
   // Execute command and display output as chat message
   // CRITICAL: Only runs when status is 'executing' AND approved is explicitly true
@@ -132,14 +183,127 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     return null;
   }, []);
 
-  const handleSend = useCallback(async (content: string) => {
+/**
+   * Build LLM content from text and images
+   */
+  const buildLLMContent = useCallback((text: string, images?: ImageAttachment[]): string | LLMContentPart[] => {
+    if (!images || images.length === 0) {
+      return text;
+    }
+
+    // Build multimodal content with images first, then text
+    const parts: LLMContentPart[] = [
+      ...images.map((img): LLMContentPart => ({
+        type: 'image',
+        data: img.data,
+        mimeType: img.mimeType,
+      })),
+      { type: 'text', text },
+    ];
+
+    return parts;
+  }, []);
+
+  const handleEditAndRetry = useCallback(async (messageId: string, newContent: string) => {
+    if (!settings.apiKey) return;
+
+    // Update the message content and truncate subsequent messages
+    updateMessage(messageId, newContent);
+    truncateMessagesAfter(messageId);
+
+    // Start thinking animation while waiting for LLM
+    setThinking(true);
+
+    try {
+      const provider = getProvider(settings.llmProvider);
+
+      // Build system prompt from personality settings with system info
+      const systemPrompt = buildSystemPrompt({
+        selectedPersonality: settings.selectedPersonality,
+        detailLevel: settings.detailLevel,
+        assistantSubject: settings.assistantSubject,
+        customSubject: settings.customSubject,
+      }, systemInfo);
+
+      // Get fresh messages from store (after truncation)
+      const currentMessages = useAppStore.getState().chat.messages;
+
+      // Build messages array with system prompt
+      const llmMessages: LLMMessage[] = [
+        { role: 'system', content: systemPrompt },
+        ...currentMessages.map((m) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })),
+      ];
+
+      debugLog(`[LLM] Edit & Retry: Sending ${llmMessages.length} messages to ${settings.llmProvider}/${settings.llmModel}`);
+
+      const response = await provider.chat(llmMessages, {
+        apiKey: settings.apiKey,
+        model: settings.llmModel,
+        maxTokens: 4096,
+        temperature: 0.8,
+      });
+
+      // Done thinking
+      setThinking(false);
+
+      // Check for EXECUTE tag in response
+      const executeResult = parseExecuteTag(response);
+
+      if (executeResult) {
+        if (executeResult.cleanResponse) {
+          addMessage({ role: 'assistant', content: executeResult.cleanResponse });
+        }
+        setGeneratedCommand(newContent, executeResult.command);
+      } else {
+        addMessage({ role: 'assistant', content: response });
+      }
+
+      setExpression('neutral');
+
+    } catch (error) {
+      console.error('LLM Error:', error);
+      setThinking(false);
+
+      addMessage({
+        role: 'assistant',
+        content: `Ah, something went wrong! ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+      setExpression('sad');
+    }
+  }, [settings, systemInfo, parseExecuteTag, setGeneratedCommand, addMessage, setThinking, setExpression, updateMessage, truncateMessagesAfter]);
+
+  const handleSend = useCallback(async (content: string, images?: ImageAttachment[]) => {
+    // Handle slash commands before anything else
+    if (isSlashCommand(content)) {
+      const result = executeSlashCommand(content, {
+        clearMessages,
+        toggleSettings,
+        updateSettings: (s) => useAppStore.getState().updateSettings(s),
+        addMessage: (msg) => addMessage(msg),
+        availableCharacters: Object.keys(characters),
+        currentCharacter: settings.selectedCharacter,
+      });
+
+      if (result?.handled) {
+        if (result.error) {
+          addMessage({ role: 'assistant', content: `**Error:** ${result.error}` });
+        } else if (result.feedbackMessage) {
+          addMessage({ role: 'assistant', content: result.feedbackMessage });
+        }
+        return; // Don't send to LLM
+      }
+    }
+
     if (!settings.apiKey) {
       // This shouldn't happen since input is disabled without API key
       return;
     }
 
-    // Add user message
-    addMessage({ role: 'user', content });
+    // Add user message with images
+    addMessage({ role: 'user', content, images });
 
     // Start thinking animation while waiting for LLM
     setThinking(true);
@@ -156,61 +320,123 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       }, systemInfo);
 
       // Build messages array with system prompt
+      // Include images from previous messages and the current message
       const llmMessages: LLMMessage[] = [
         { role: 'system', content: systemPrompt },
         ...messages.map((m) => ({
           role: m.role as 'user' | 'assistant',
-          content: m.content,
+          content: buildLLMContent(m.content, m.images),
         })),
-        { role: 'user', content },
+        { role: 'user', content: buildLLMContent(content, images) },
       ];
 
       debugLog(`[LLM] Sending ${llmMessages.length} messages to ${settings.llmProvider}/${settings.llmModel}`);
-      debugLog(`[LLM] System prompt length: ${llmMessages[0]?.content?.length || 0}`);
-      debugLog(`[LLM] System prompt includes EXECUTE instruction: ${llmMessages[0]?.content?.includes('[EXECUTE:') || false}`);
+      const systemContent = llmMessages[0]?.content;
+      const systemText = typeof systemContent === 'string' ? systemContent : '';
+      debugLog(`[LLM] System prompt length: ${systemText.length}`);
+      debugLog(`[LLM] System prompt includes EXECUTE instruction: ${systemText.includes('[EXECUTE:')}`);
+      debugLog(`[LLM] Message has images: ${!!images && images.length > 0}`);
 
-      const response = await provider.chat(llmMessages, {
+      const config = {
         apiKey: settings.apiKey,
         model: settings.llmModel,
         maxTokens: 4096,
         temperature: 0.8,
-      });
+      };
 
-      // Done thinking
-      setThinking(false);
+      let response: string;
 
-      debugLog(`[LLM] Response received, length=${response.length}`);
-      debugLog(`[LLM] Response preview: ${response.substring(0, 200)}`);
+      // Use streaming if available
+      if (provider.streamChat) {
+        // Create placeholder message and get its ID for streaming updates
+        const messageId = addStreamingMessage();
 
-      // Check for EXECUTE tag in response
-      const executeResult = parseExecuteTag(response);
-      debugLog(`[LLM] parseExecuteTag result: ${executeResult ? `command="${executeResult.command}"` : 'null'}`);
+        // Stop showing thinking indicator since content is now appearing
+        setThinking(false);
 
-      if (executeResult) {
-        debugLog(`[LLM] EXECUTE tag found, calling setGeneratedCommand`);
-        // Only add message if there's surrounding text; otherwise CommandApproval provides context
-        if (executeResult.cleanResponse) {
-          addMessage({ role: 'assistant', content: executeResult.cleanResponse });
+        // Typewriter effect: buffer incoming tokens and reveal character by character
+        let fullResponse = '';
+        let displayedLength = 0;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+        const animateTyping = () => {
+          if (displayedLength < fullResponse.length) {
+            // Reveal 1 character every 5ms (~200 chars/sec)
+            displayedLength += 1;
+            updateMessageContent(messageId, fullResponse.slice(0, displayedLength));
+            timeoutId = setTimeout(animateTyping, 5);
+          }
+        };
+
+        for await (const chunk of provider.streamChat(llmMessages, config)) {
+          fullResponse += chunk;
+          // Start animation if not already running
+          if (timeoutId === null) {
+            animateTyping();
+          }
         }
-        // Trigger command approval flow - CommandApproval component shows the command
-        setGeneratedCommand(content, executeResult.command);
-        debugLog(`[LLM] setGeneratedCommand called, current status=${useAppStore.getState().execution.status}`);
+
+        // Wait for animation to finish typing everything
+        while (displayedLength < fullResponse.length) {
+          await new Promise(resolve => setTimeout(resolve, 5));
+        }
+        response = fullResponse;
+
+        debugLog(`[LLM] Streaming complete, length=${response.length}`);
+        debugLog(`[LLM] Response preview: ${response.substring(0, 200)}`);
+
+        // Check for EXECUTE tag in response
+        const executeResult = parseExecuteTag(response);
+        debugLog(`[LLM] parseExecuteTag result: ${executeResult ? `command="${executeResult.command}"` : 'null'}`);
+
+        if (executeResult) {
+          debugLog(`[LLM] EXECUTE tag found, calling setGeneratedCommand`);
+          // Update the message to show clean response (without EXECUTE tag)
+          updateMessageContent(messageId, executeResult.cleanResponse);
+          // Trigger command approval flow
+          setGeneratedCommand(content, executeResult.command);
+          debugLog(`[LLM] setGeneratedCommand called, current status=${useAppStore.getState().execution.status}`);
+        }
       } else {
-        debugLog(`[LLM] No EXECUTE tag, adding as regular message`);
-        addMessage({ role: 'assistant', content: response });
-        // Show notification based on user preference
-        const state = useAppStore.getState();
-        const pref = state.settings.notificationPreference;
-        const isChatOpen = state.ui.chatPanelOpen;
-        const windowFocused = isWindowCurrentlyFocused();
-        const shouldNotify =
-          (pref === 'chat_closed' && !isChatOpen) ||
-          (pref === 'unfocused' && !windowFocused);
-        debugLog(`[NOTIFICATION] pref=${pref}, isChatOpen=${isChatOpen}, windowFocused=${windowFocused}, shouldNotify=${shouldNotify}`);
-        if (shouldNotify) {
-          const preview = response.substring(0, 100);
-          debugLog(`[NOTIFICATION] Sending notification: "${preview}"`);
-          showDesktopNotification('Desktop Waifu', preview + (preview.length >= 100 ? '...' : ''));
+        // Fallback to non-streaming
+        response = await provider.chat(llmMessages, config);
+
+        // Done thinking
+        setThinking(false);
+
+        debugLog(`[LLM] Response received, length=${response.length}`);
+        debugLog(`[LLM] Response preview: ${response.substring(0, 200)}`);
+
+        // Check for EXECUTE tag in response
+        const executeResult = parseExecuteTag(response);
+        debugLog(`[LLM] parseExecuteTag result: ${executeResult ? `command="${executeResult.command}"` : 'null'}`);
+
+        if (executeResult) {
+          debugLog(`[LLM] EXECUTE tag found, calling setGeneratedCommand`);
+          // Only add message if there's surrounding text; otherwise CommandApproval provides context
+          if (executeResult.cleanResponse) {
+            addMessage({ role: 'assistant', content: executeResult.cleanResponse });
+          }
+          // Trigger command approval flow - CommandApproval component shows the command
+          setGeneratedCommand(content, executeResult.command);
+          debugLog(`[LLM] setGeneratedCommand called, current status=${useAppStore.getState().execution.status}`);
+        } else {
+          debugLog(`[LLM] No EXECUTE tag, adding as regular message`);
+          addMessage({ role: 'assistant', content: response });
+          // Show notification based on user preference
+          const state = useAppStore.getState();
+          const pref = state.settings.notificationPreference;
+          const isChatOpen = state.ui.chatPanelOpen;
+          const windowFocused = isWindowCurrentlyFocused();
+          const shouldNotify =
+            (pref === 'chat_closed' && !isChatOpen) ||
+            (pref === 'unfocused' && !windowFocused);
+          debugLog(`[NOTIFICATION] pref=${pref}, isChatOpen=${isChatOpen}, windowFocused=${windowFocused}, shouldNotify=${shouldNotify}`);
+          if (shouldNotify) {
+            const preview = response.substring(0, 100);
+            debugLog(`[NOTIFICATION] Sending notification: "${preview}"`);
+            showDesktopNotification('Desktop Waifu', preview + (preview.length >= 100 ? '...' : ''));
+          }
         }
       }
 
@@ -226,7 +452,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       });
       setExpression('sad');
     }
-  }, [settings, messages, addMessage, setThinking, setExpression, systemInfo, parseExecuteTag, setGeneratedCommand]);
+}, [settings, messages, addMessage, addStreamingMessage, updateMessageContent, setThinking, setExpression, systemInfo, parseExecuteTag, setGeneratedCommand, buildLLMContent]);
 
   return (
     <div className="w-full h-full flex flex-col bg-slate-900/90 border border-slate-600">
@@ -249,6 +475,34 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
               <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
           </button>
+          <div className="relative">
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}
+              disabled={messages.length === 0}
+              className="text-white hover:text-pink-400 transition-colors p-1.5 border-2 border-white hover:border-pink-400 transform hover:scale-110 cursor-grab active:cursor-grabbing disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Export chat"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-slate-800 border border-slate-600 rounded shadow-lg z-50 min-w-[140px]">
+                <button
+                  onClick={() => handleExport('json')}
+                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-slate-700"
+                >
+                  Export as JSON
+                </button>
+                <button
+                  onClick={() => handleExport('markdown')}
+                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-slate-700"
+                >
+                  Export as Markdown
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={toggleSettings}
             className="text-white hover:text-pink-400 transition-colors p-1.5 border-2 border-white hover:border-pink-400 transform hover:scale-110 cursor-grab active:cursor-grabbing"
@@ -272,8 +526,15 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         </div>
       </div>
 
+      {/* Export notification */}
+      {exportNotification && (
+        <div className="px-3 py-2 bg-slate-800 border-b border-slate-600 text-sm text-slate-300">
+          {exportNotification}
+        </div>
+      )}
+
       {/* Messages */}
-      <MessageList messages={messages} isTyping={isThinking} />
+      <MessageList messages={messages} isTyping={isThinking} onEditAndRetry={handleEditAndRetry} />
 
       {/* Command Approval */}
       <CommandApproval />

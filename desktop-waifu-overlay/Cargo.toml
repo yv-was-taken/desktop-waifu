@@ -17,7 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 # GTK4 ecosystem
-gtk4 = "0.10"
+gtk4 = { version = "0.10", features = ["v4_10"] }
 gtk4-layer-shell = "0.7"
 webkit6 = "0.5"
 cairo-rs = { version = "0.21", features = ["v1_16"] }
@@ -36,6 +36,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 thiserror = "2"
 
+# CLI argument parsing
+clap = { version = "4", features = ["derive"] }
+
 # System tray (StatusNotifierItem protocol)
 ksni = "0.2"
 
@@ -45,3 +48,6 @@ notify-rust = "4"
 # Static file server for production mode
 axum = "0.8"
 tower-http = { version = "0.6", features = ["fs"] }
+
+# Base64 encoding for file dialog
+base64 = "0.22"

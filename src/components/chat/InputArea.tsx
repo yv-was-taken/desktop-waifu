@@ -1,19 +1,49 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAppStore } from '../../store';
+import { readClipboardImage, fileToImageAttachment, revokeImagePreview, SUPPORTED_MIME_TYPES } from '../../lib/image';
+import { isOverlayMode, openFileDialog, type FileDialogResult } from '../../lib/platform';
+import type { ImageAttachment } from '../../types';
+import { CommandSuggestions, getFilteredCommands } from './CommandSuggestions';
 
 interface InputAreaProps {
-  onSend: (message: string) => void;
+  onSend: (message: string, images?: ImageAttachment[]) => void;
   disabled?: boolean;
 }
 
 export function InputArea({ onSend, disabled }: InputAreaProps) {
   const [input, setInput] = useState('');
+  const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevExecutionStatusRef = useRef<string | null>(null);
 
   const setUserTyping = useAppStore((state) => state.setUserTyping);
   const executionStatus = useAppStore((state) => state.execution.status);
+
+  // Determine if we should show command suggestions
+  const showSuggestions = useMemo(() => {
+    const trimmed = input.trimStart();
+    return trimmed.startsWith('/') && !trimmed.includes(' ');
+  }, [input]);
+
+  // Extract the filter text (everything after `/`)
+  const commandFilter = useMemo(() => {
+    if (!showSuggestions) return '';
+    return input.trimStart().slice(1);
+  }, [input, showSuggestions]);
+
+  // Reset selected index when filter changes
+  useEffect(() => {
+    setSelectedCommandIndex(0);
+  }, [commandFilter]);
+
+  // Handle selecting a command from suggestions
+  const handleSelectCommand = useCallback((commandName: string) => {
+    setInput(`/${commandName} `);
+    textareaRef.current?.focus();
+  }, []);
 
   // Handle typing state with debounce
   const handleInputChange = useCallback((value: string) => {
@@ -43,27 +73,145 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
 
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
-    if (trimmed && !disabled) {
+    const hasContent = trimmed || pendingImages.length > 0;
+    if (hasContent && !disabled) {
       // Clear typing state immediately on submit
       setUserTyping(false);
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
 
-      onSend(trimmed);
+      onSend(trimmed || 'What is in this image?', pendingImages.length > 0 ? pendingImages : undefined);
       setInput('');
+      setPendingImages([]);
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
     }
-  }, [input, disabled, onSend, setUserTyping]);
+  }, [input, pendingImages, disabled, onSend, setUserTyping]);
+
+  // Handle clipboard paste for images
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const image = await readClipboardImage();
+    if (image) {
+      e.preventDefault();
+      setPendingImages((prev) => [...prev, image]);
+    }
+    // If no image, let default paste behavior handle text
+  }, []);
+
+  // Handle file selection
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    const newImages: ImageAttachment[] = [];
+    for (const file of files) {
+      try {
+        const image = await fileToImageAttachment(file);
+        newImages.push(image);
+      } catch (error) {
+        console.error('Failed to process image:', error);
+      }
+    }
+
+    if (newImages.length > 0) {
+      setPendingImages((prev) => [...prev, ...newImages]);
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, []);
+
+  // Remove a pending image
+  const removeImage = useCallback((id: string) => {
+    setPendingImages((prev) => {
+      const image = prev.find((img) => img.id === id);
+      if (image) {
+        revokeImagePreview(image);
+      }
+      return prev.filter((img) => img.id !== id);
+    });
+  }, []);
+
+  // Convert FileDialogResult to ImageAttachment
+  const fileDialogResultToAttachment = useCallback((result: FileDialogResult): ImageAttachment => {
+    // Create a data URL from base64 data
+    const dataUrl = `data:${result.mimeType};base64,${result.data}`;
+    return {
+      id: crypto.randomUUID(),
+      mimeType: result.mimeType as ImageAttachment['mimeType'],
+      data: result.data,
+      previewUrl: dataUrl,
+    };
+  }, []);
+
+  // Handle attach button click - use native dialog in overlay mode
+  const handleAttachClick = useCallback(async () => {
+    if (isOverlayMode) {
+      // Use native GTK4 file dialog in overlay mode
+      // Rust handler will temporarily lower overlay layer so dialog appears on top
+      const files = await openFileDialog();
+      if (files && files.length > 0) {
+        const newImages = files.map(fileDialogResultToAttachment);
+        setPendingImages((prev) => [...prev, ...newImages]);
+      }
+    } else {
+      // Fall back to HTML file input in non-overlay mode
+      fileInputRef.current?.click();
+    }
+  }, [fileDialogResultToAttachment]);
+
+  // Cleanup preview URLs on unmount
+  useEffect(() => {
+    return () => {
+      pendingImages.forEach(revokeImagePreview);
+    };
+  }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Handle command suggestion navigation
+    if (showSuggestions) {
+      const suggestions = getFilteredCommands(commandFilter);
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedCommandIndex((prev) =>
+          prev < suggestions.length - 1 ? prev + 1 : prev
+        );
+        return;
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedCommandIndex((prev) => (prev > 0 ? prev - 1 : 0));
+        return;
+      }
+
+      // Tab autocompletes the selected command
+      if (e.key === 'Tab' && suggestions.length > 0) {
+        e.preventDefault();
+        const selected = suggestions[selectedCommandIndex];
+        if (selected) {
+          handleSelectCommand(selected.name);
+        }
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setInput('');
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
-  }, [handleSubmit]);
+  }, [handleSubmit, showSuggestions, commandFilter, selectedCommandIndex, handleSelectCommand]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -111,18 +259,73 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
     };
   }, [disabled]);
 
+  const hasContent = input.trim() || pendingImages.length > 0;
+
   return (
     <div className="p-3 bg-black">
+      {/* Image preview area */}
+      {pendingImages.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {pendingImages.map((image) => (
+            <div key={image.id} className="relative group">
+              <img
+                src={image.previewUrl}
+                alt="Pending attachment"
+                className="h-16 w-16 object-cover border-2 border-slate-600 rounded"
+              />
+              <button
+                onClick={() => removeImage(image.id)}
+                className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                title="Remove image"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-end gap-2">
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={SUPPORTED_MIME_TYPES.join(',')}
+          onChange={handleFileSelect}
+          multiple
+          className="hidden"
+        />
+
+        {/* Attach button */}
+        <button
+          onClick={handleAttachClick}
+          disabled={disabled}
+          className="bg-slate-700 text-white border border-slate-600 px-3 py-3 hover:bg-slate-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Attach image"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+          </svg>
+        </button>
+
         <div className="flex-1 relative">
+          {showSuggestions && (
+            <CommandSuggestions
+              filter={commandFilter}
+              onSelect={handleSelectCommand}
+              selectedIndex={selectedCommandIndex}
+              onSelectedIndexChange={setSelectedCommandIndex}
+            />
+          )}
           <textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             onFocus={() => input.trim() && setUserTyping(true)}
             onBlur={() => setUserTyping(false)}
-            placeholder="Type a message..."
+            placeholder={pendingImages.length > 0 ? "Add a message or just send..." : "Type a message or paste an image..."}
             disabled={disabled}
             rows={1}
             className="w-full resize-none bg-white text-black border border-white px-4 py-3 text-sm focus:outline-none focus:border-pink-500 placeholder-gray-400 disabled:opacity-50 font-medium"
@@ -130,7 +333,7 @@ export function InputArea({ onSend, disabled }: InputAreaProps) {
         </div>
         <button
           onClick={handleSubmit}
-          disabled={disabled || !input.trim()}
+          disabled={disabled || !hasContent}
           className="bg-white text-black border border-white px-5 py-3 font-black text-sm uppercase tracking-wide hover:bg-pink-500 hover:text-white hover:border-pink-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
         >
           Send
