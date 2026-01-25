@@ -140,17 +140,35 @@ function ApiKeySetup() {
 
 export function MessageList({ messages, isTyping, onEditAndRetry }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const userScrolledUp = useRef<boolean>(false);
   const apiKey = useAppStore((state) => state.settings.apiKey);
   const fontSize = useAppStore((state) => state.settings.fontSize);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
 
+  // Track if user manually scrolled up
+  const handleScroll = () => {
+    if (!scrollRef.current) return;
+    const container = scrollRef.current;
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+    userScrolledUp.current = !isAtBottom;
+  };
+
+  // Auto-scroll to bottom when messages change, unless user scrolled up
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (!scrollRef.current || userScrolledUp.current) return;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isTyping]);
+
+  // Reset scroll lock when a new message is added (not just updated)
+  const prevMessageCount = useRef(messages.length);
+  useEffect(() => {
+    if (messages.length > prevMessageCount.current) {
+      userScrolledUp.current = false;
+      prevMessageCount.current = messages.length;
+    }
+  }, [messages.length]);
 
   const copyToClipboard = async (text: string, messageId: string) => {
     await navigator.clipboard.writeText(text);
@@ -182,6 +200,7 @@ export function MessageList({ messages, isTyping, onEditAndRetry }: MessageListP
     <div
       ref={scrollRef}
       className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4 chat-scroll"
+      onScroll={handleScroll}
       onMouseDown={(e) => {
         // Prevent clicks from stealing focus from textarea (Slack/Discord behavior)
         // But allow default for form elements that need it (select, input, button)

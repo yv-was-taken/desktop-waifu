@@ -68,6 +68,8 @@ interface AppState {
   // Chat
   chat: ChatState;
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
+  addStreamingMessage: () => string; // Returns the message id for streaming updates
+  updateMessageContent: (id: string, content: string) => void;
   setThinking: (thinking: boolean) => void;
   setUserTyping: (typing: boolean) => void;
   clearMessages: () => void;
@@ -147,6 +149,33 @@ export const useAppStore = create<AppState>()(
                 timestamp: Date.now(),
               },
             ],
+          },
+        })),
+      addStreamingMessage: () => {
+        const id = crypto.randomUUID();
+        set((state) => ({
+          chat: {
+            ...state.chat,
+            messages: [
+              ...state.chat.messages,
+              {
+                id,
+                role: 'assistant' as const,
+                content: '',
+                timestamp: Date.now(),
+              },
+            ],
+          },
+        }));
+        return id;
+      },
+      updateMessageContent: (id, content) =>
+        set((state) => ({
+          chat: {
+            ...state.chat,
+            messages: state.chat.messages.map((m) =>
+              m.id === id ? { ...m, content } : m
+            ),
           },
         })),
       setThinking: (thinking) =>
@@ -341,6 +370,7 @@ export const useAppStore = create<AppState>()(
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<AppState>;
+        debugLog(`[STORE] Merging persisted state. Has settings: ${!!persisted.settings}, Has apiKey: ${!!persisted.settings?.apiKey}`);
         return {
           ...currentState,
           settings: { ...currentState.settings, ...persisted.settings },
@@ -350,3 +380,5 @@ export const useAppStore = create<AppState>()(
     }
   )
 );
+
+debugLog('[STORE] Store created successfully');
