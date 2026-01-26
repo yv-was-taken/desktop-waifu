@@ -67,11 +67,11 @@ pub fn socket_path() -> PathBuf {
 /// Send a command to the running instance via Unix socket
 pub fn send_command(cmd: &str) -> Result<(), std::io::Error> {
     let socket_path = socket_path();
-    eprintln!("[IPC] Connecting to socket at {:?}", socket_path);
+    crate::debug_log!("[IPC] Connecting to socket at {:?}", socket_path);
     let mut stream = UnixStream::connect(&socket_path)?;
-    eprintln!("[IPC] Connected, sending command: {}", cmd);
+    crate::debug_log!("[IPC] Connected, sending command: {}", cmd);
     stream.write_all(cmd.as_bytes())?;
-    eprintln!("[IPC] Command sent successfully");
+    crate::debug_log!("[IPC] Command sent successfully");
     Ok(())
 }
 
@@ -85,31 +85,31 @@ pub fn spawn_socket_listener() -> mpsc::Receiver<String> {
     let _ = std::fs::remove_file(&socket_path);
 
     std::thread::spawn(move || {
-        eprintln!("[IPC] Binding socket listener at {:?}", socket_path);
+        crate::debug_log!("[IPC] Binding socket listener at {:?}", socket_path);
         let listener = match UnixListener::bind(&socket_path) {
             Ok(l) => {
-                eprintln!("[IPC] Socket listener bound successfully");
+                crate::debug_log!("[IPC] Socket listener bound successfully");
                 l
             }
             Err(e) => {
-                eprintln!("[IPC] Failed to bind socket at {:?}: {}", socket_path, e);
+                crate::debug_log!("[IPC] Failed to bind socket at {:?}: {}", socket_path, e);
                 return;
             }
         };
 
-        eprintln!("[IPC] Waiting for incoming connections...");
+        crate::debug_log!("[IPC] Waiting for incoming connections...");
         for stream in listener.incoming() {
             if let Ok(mut stream) = stream {
-                eprintln!("[IPC] Received incoming connection");
+                crate::debug_log!("[IPC] Received incoming connection");
                 let mut buf = [0u8; 64];
                 if let Ok(n) = stream.read(&mut buf) {
                     let cmd = String::from_utf8_lossy(&buf[..n]).trim().to_string();
-                    eprintln!("[IPC] Received command: '{}'", cmd);
+                    crate::debug_log!("[IPC] Received command: '{}'", cmd);
                     if tx.send(cmd.clone()).is_err() {
-                        eprintln!("[IPC] Receiver dropped, exiting listener thread");
+                        crate::debug_log!("[IPC] Receiver dropped, exiting listener thread");
                         break;
                     }
-                    eprintln!("[IPC] Command sent to main thread");
+                    crate::debug_log!("[IPC] Command sent to main thread");
                 }
             }
         }

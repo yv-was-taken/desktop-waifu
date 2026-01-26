@@ -360,6 +360,14 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
         const animateTyping = () => {
+          // Skip animation if document is hidden (setTimeout is throttled)
+          if (document.hidden) {
+            displayedLength = fullResponse.length;
+            updateMessageContent(messageId, fullResponse);
+            timeoutId = null;
+            return;
+          }
+
           if (displayedLength < fullResponse.length) {
             // Reveal 1 character every 5ms (~200 chars/sec)
             displayedLength += 1;
@@ -371,6 +379,19 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
           }
         };
 
+        // Handle visibility change to complete animation immediately when hidden
+        const handleVisibilityChange = () => {
+          if (document.hidden && displayedLength < fullResponse.length) {
+            displayedLength = fullResponse.length;
+            updateMessageContent(messageId, fullResponse);
+            if (timeoutId !== null) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+          }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
         for await (const chunk of provider.streamChat(llmMessages, config)) {
           fullResponse += chunk;
           // Start animation if not already running
@@ -379,28 +400,10 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
           }
         }
 
-        // Wait for animation to finish typing everything
-        while (displayedLength < fullResponse.length) {
-          await new Promise(resolve => setTimeout(resolve, 5));
-        }
-        response = fullResponse;
-
-        debugLog(`[LLM] Streaming complete, length=${response.length}`);
-        debugLog(`[LLM] Response preview: ${response.substring(0, 200)}`);
-
-        // Check for EXECUTE tag in response
-        const executeResult = parseExecuteTag(response);
-        debugLog(`[LLM] parseExecuteTag result: ${executeResult ? `command="${executeResult.command}"` : 'null'}`);
-
-        if (executeResult) {
-          debugLog(`[LLM] EXECUTE tag found, calling setGeneratedCommand`);
-          // Update the message to show clean response (without EXECUTE tag)
-          updateMessageContent(messageId, executeResult.cleanResponse);
-          // Trigger command approval flow
-          setGeneratedCommand(content, executeResult.command);
-          debugLog(`[LLM] setGeneratedCommand called, current status=${useAppStore.getState().execution.status}`);
-        } else {
-          // Show notification based on user preference (streaming complete)
+        // Trigger notification immediately when stream completes (before waiting for animation)
+        // This ensures notifications fire even if the window is hidden and animation is throttled
+        const executeResult = parseExecuteTag(fullResponse);
+        if (!executeResult) {
           const state = useAppStore.getState();
           const pref = state.settings.notificationPreference;
           const isChatOpen = state.ui.chatPanelOpen;
@@ -410,10 +413,41 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
             (pref === 'unfocused' && !windowFocused);
           debugLog(`[NOTIFICATION] pref=${pref}, isChatOpen=${isChatOpen}, windowFocused=${windowFocused}, shouldNotify=${shouldNotify}`);
           if (shouldNotify) {
-            const preview = response.substring(0, 100);
+            const preview = fullResponse.substring(0, 100);
             debugLog(`[NOTIFICATION] Sending notification: "${preview}"`);
             showDesktopNotification('Desktop Waifu', preview + (preview.length >= 100 ? '...' : ''));
           }
+        }
+
+        // Wait for animation to finish typing everything
+        while (displayedLength < fullResponse.length) {
+          // Skip animation wait if document is hidden (setTimeout is throttled)
+          if (document.hidden) {
+            displayedLength = fullResponse.length;
+            updateMessageContent(messageId, fullResponse);
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 5));
+        }
+
+        // Clean up visibility listener
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+
+        response = fullResponse;
+
+        debugLog(`[LLM] Streaming complete, length=${response.length}`);
+        debugLog(`[LLM] Response preview: ${response.substring(0, 200)}`);
+
+        // Check for EXECUTE tag in response (reuse result from above)
+        debugLog(`[LLM] parseExecuteTag result: ${executeResult ? `command="${executeResult.command}"` : 'null'}`);
+
+        if (executeResult) {
+          debugLog(`[LLM] EXECUTE tag found, calling setGeneratedCommand`);
+          // Update the message to show clean response (without EXECUTE tag)
+          updateMessageContent(messageId, executeResult.cleanResponse);
+          // Trigger command approval flow
+          setGeneratedCommand(content, executeResult.command);
+          debugLog(`[LLM] setGeneratedCommand called, current status=${useAppStore.getState().execution.status}`);
         }
       } else {
         // Fallback to non-streaming

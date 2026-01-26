@@ -94,3 +94,9 @@ curl -sL https://github.com/yv-was-taken/desktop-waifu/archive/refs/tags/vX.X.X.
    - Server: Set `DEBUG_LOGGING = true` in `desktop-waifu-overlay/src/main.rs`
 3. Use: `debugLog('your message here');`
 4. Messages will appear in the terminal where `bun dev` is running
+
+### Testing Hide Hotkey in Dev Mode
+To simulate the hide/show hotkey toggle during development, send a command to the IPC socket:
+```bash
+python -c "import socket; s=socket.socket(socket.AF_UNIX); s.connect('/run/user/$(id -u)/desktop-waifu.sock'); s.send(b'toggle')"
+```

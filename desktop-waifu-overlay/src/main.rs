@@ -5,7 +5,8 @@ mod tray;
 use clap::Parser;
 
 // Debug logging flag - set to true to enable debug output to terminal
-const DEBUG_LOGGING: bool = false;
+// Made pub(crate) so the debug_log! macro can access it from submodules
+pub(crate) const DEBUG_LOGGING: bool = false;
 
 /// Desktop Waifu overlay - Animated 3D VRM characters for your desktop
 #[derive(Parser)]
@@ -25,10 +26,12 @@ struct Cli {
 }
 
 // Helper macro for conditional debug logging
+// Uses #[macro_export] so it can be used in submodules via crate::debug_log!
+#[macro_export]
 macro_rules! debug_log {
     ($($arg:tt)*) => {
-        if DEBUG_LOGGING {
-            println!($($arg)*);
+        if crate::DEBUG_LOGGING {
+            eprintln!($($arg)*);
         }
     };
 }
