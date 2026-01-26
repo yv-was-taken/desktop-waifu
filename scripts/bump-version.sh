@@ -69,6 +69,10 @@ fi
 echo "  - packaging/homebrew/desktop-waifu.rb"
 sed -i "s|/tags/v[^\"]*\.tar\.gz|/tags/v$NEW_VERSION.tar.gz|" "$PROJECT_ROOT/packaging/homebrew/desktop-waifu.rb"
 
+# Update Nix package
+echo "  - packaging/nix/default.nix"
+sed -i "s/version = \"[^\"]*\";/version = \"$NEW_VERSION\";/" "$PROJECT_ROOT/packaging/nix/default.nix"
+
 echo ""
 echo "Version bumped to $NEW_VERSION"
 echo ""

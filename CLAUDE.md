@@ -79,6 +79,7 @@ The project is published to multiple package registries:
 | **Arch (AUR)** | `yay -S desktop-waifu` | packaging/aur/PKGBUILD |
 | **Debian/Ubuntu** | `sudo dpkg -i desktop-waifu_X.Y.Z_amd64.deb` | GitHub Releases (.deb) |
 | **macOS (Homebrew)** | `brew tap yv-was-taken/desktop-waifu && brew install desktop-waifu` | packaging/homebrew/desktop-waifu.rb |
+| **NixOS/Nix** | `nix run github:yv-was-taken/desktop-waifu` | packaging/nix/default.nix |
 
 ### Release Workflow
 

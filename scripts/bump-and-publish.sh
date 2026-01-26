@@ -76,6 +76,9 @@ get_version_from_file() {
         *.rb)
             grep -E '/tags/v[0-9]+\.[0-9]+\.[0-9]+' "$file" | sed -E 's/.*\/tags\/v([0-9]+\.[0-9]+\.[0-9]+).*/\1/'
             ;;
+        *.nix)
+            grep -E 'version = "[0-9]+\.[0-9]+\.[0-9]+"' "$file" | head -1 | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/'
+            ;;
     esac
 }
 
@@ -87,6 +90,7 @@ VERSION_FILES=(
     "desktop-waifu-overlay/Cargo.toml"
     "packaging/aur/PKGBUILD"
     "packaging/homebrew/desktop-waifu.rb"
+    "packaging/nix/default.nix"
 )
 
 # Check if all version files are at the target version
