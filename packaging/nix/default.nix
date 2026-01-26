@@ -26,7 +26,7 @@ let
   # Build gtk4-layer-shell from source (not yet in nixpkgs)
   gtk4-layer-shell = stdenv.mkDerivation rec {
     pname = "gtk4-layer-shell";
-    version = "1.1.0";
+    version = "0.2.5";
 
     src = fetchFromGitHub {
       owner = "wmww";
@@ -70,7 +70,7 @@ let
   # This is allowed network access because the output hash is verified
   npmDeps = stdenv.mkDerivation {
     pname = "desktop-waifu-npm-deps";
-    version = "0.1.0";
+    version = "0.2.5";
 
     inherit src;
 
@@ -106,7 +106,7 @@ let
 in
 rustPlatform.buildRustPackage {
   pname = "desktop-waifu";
-  version = "0.2.4";
+  version = "0.2.5";
 
   inherit src;
 
