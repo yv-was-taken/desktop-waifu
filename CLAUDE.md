@@ -82,32 +82,32 @@ The project is published to multiple package registries:
 
 ### Release Workflow
 
-When releasing a new version, all packages must be updated:
+Use the unified release script to bump version and publish to all registries:
 
-1. **Bump version** (updates all config files automatically):
-   ```bash
-   ./scripts/bump-version.sh X.Y.Z
-   git add -A && git commit -m "Bump version to X.Y.Z"
-   git tag vX.Y.Z && git push origin master --tags
-   ```
+```bash
+./scripts/bump-and-publish.sh X.Y.Z
+```
 
-2. **Wait for GitHub Actions** - Pushing the tag triggers `.github/workflows/release.yml` which:
-   - Builds Linux tarball
-   - Builds Debian .deb package
-   - Builds macOS .app bundle
-   - Creates GitHub Release with all artifacts
+This script is **idempotent** - if it fails midway, re-run it and it will skip completed steps.
 
-3. **Publish to Homebrew** (fetches sha256 from new tag, updates formula, pushes to tap):
-   ```bash
-   ./scripts/publish-homebrew.sh
-   git add packaging/homebrew/desktop-waifu.rb && git commit -m "Update Homebrew sha256 for vX.Y.Z"
-   git push
-   ```
+**What it does:**
+1. Bumps version in all config files (package.json, Cargo.toml, PKGBUILD, etc.)
+2. Commits and pushes the version bump
+3. Creates and pushes git tag (triggers GitHub Actions for .deb/.app builds)
+4. Publishes to Homebrew tap (fetches sha256, updates formula)
+5. Publishes to AUR (generates .SRCINFO, pushes to AUR repo)
 
-4. **Publish to AUR** (generates .SRCINFO, pushes to AUR repo):
-   ```bash
-   ./scripts/publish-aur.sh
-   ```
+**To verify GitHub Actions completed successfully:**
+```bash
+./scripts/bump-and-publish.sh --verify X.Y.Z
+```
+
+This waits for the CI build and verifies all artifacts are available.
+
+**Individual scripts** (used internally by bump-and-publish.sh):
+- `./scripts/bump-version.sh` - Updates version in all files
+- `./scripts/publish-homebrew.sh` - Publishes to Homebrew tap
+- `./scripts/publish-aur.sh` - Publishes to AUR
 
 ## Debugging
 

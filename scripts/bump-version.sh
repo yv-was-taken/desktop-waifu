@@ -48,18 +48,22 @@ echo "  - src-tauri/Cargo.lock"
 echo "  - packaging/aur/PKGBUILD"
 sed -i "s/^pkgver=.*/pkgver=$NEW_VERSION/" "$PROJECT_ROOT/packaging/aur/PKGBUILD"
 
-# Update Debian changelog (add new entry at top)
+# Update Debian changelog (add new entry at top, if not already present)
 echo "  - packaging/debian/changelog"
-DATE=$(date -R)
-NEW_ENTRY="desktop-waifu ($NEW_VERSION-1) unstable; urgency=medium
+if grep -q "^desktop-waifu ($NEW_VERSION-1)" "$PROJECT_ROOT/packaging/debian/changelog"; then
+    echo "    (already has entry for $NEW_VERSION)"
+else
+    DATE=$(date -R)
+    NEW_ENTRY="desktop-waifu ($NEW_VERSION-1) unstable; urgency=medium
 
   * Release version $NEW_VERSION
 
  -- yv-was-taken <yvmail@proton.me>  $DATE
 "
-# Prepend new entry to changelog
-echo "$NEW_ENTRY" | cat - "$PROJECT_ROOT/packaging/debian/changelog" > "$PROJECT_ROOT/packaging/debian/changelog.tmp"
-mv "$PROJECT_ROOT/packaging/debian/changelog.tmp" "$PROJECT_ROOT/packaging/debian/changelog"
+    # Prepend new entry to changelog
+    echo "$NEW_ENTRY" | cat - "$PROJECT_ROOT/packaging/debian/changelog" > "$PROJECT_ROOT/packaging/debian/changelog.tmp"
+    mv "$PROJECT_ROOT/packaging/debian/changelog.tmp" "$PROJECT_ROOT/packaging/debian/changelog"
+fi
 
 # Update Homebrew formula
 echo "  - packaging/homebrew/desktop-waifu.rb"
