@@ -72,16 +72,42 @@ Create a folder in `src/characters/` with:
 
 ## Package Distribution
 
-The project is published to package registries. When bumping versions, update all packaging files and they will automatically be available:
+The project is published to multiple package registries:
 
-- **AUR**: `yay -S desktop-waifu` (packaging/aur/PKGBUILD)
-- **Homebrew**: `brew install desktop-waifu` (packaging/homebrew/desktop-waifu.rb)
-- **Debian**: packaging/debian/
+| Platform | Install Command | Source |
+|----------|-----------------|--------|
+| **Arch (AUR)** | `yay -S desktop-waifu` | packaging/aur/PKGBUILD |
+| **Debian/Ubuntu** | `sudo dpkg -i desktop-waifu_X.Y.Z_amd64.deb` | GitHub Releases (.deb) |
+| **macOS (Homebrew)** | `brew tap yv-was-taken/desktop-waifu && brew install desktop-waifu` | packaging/homebrew/desktop-waifu.rb |
 
-After version bump, create and push a git tag (e.g., `git tag v0.1.1 && git push origin v0.1.1`), then update the Homebrew sha256 with:
-```bash
-curl -sL https://github.com/yv-was-taken/desktop-waifu/archive/refs/tags/vX.X.X.tar.gz | sha256sum
-```
+### Release Workflow
+
+When releasing a new version, all packages must be updated:
+
+1. **Bump version** (updates all config files automatically):
+   ```bash
+   ./scripts/bump-version.sh X.Y.Z
+   git add -A && git commit -m "Bump version to X.Y.Z"
+   git tag vX.Y.Z && git push origin master --tags
+   ```
+
+2. **Wait for GitHub Actions** - Pushing the tag triggers `.github/workflows/release.yml` which:
+   - Builds Linux tarball
+   - Builds Debian .deb package
+   - Builds macOS .app bundle
+   - Creates GitHub Release with all artifacts
+
+3. **Publish to Homebrew** (fetches sha256 from new tag, updates formula, pushes to tap):
+   ```bash
+   ./scripts/publish-homebrew.sh
+   git add packaging/homebrew/desktop-waifu.rb && git commit -m "Update Homebrew sha256 for vX.Y.Z"
+   git push
+   ```
+
+4. **Publish to AUR** (generates .SRCINFO, pushes to AUR repo):
+   ```bash
+   ./scripts/publish-aur.sh
+   ```
 
 ## Debugging
 
