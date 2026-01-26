@@ -86,8 +86,10 @@ The project is published to multiple package registries:
 Use the unified release script to bump version and publish to all registries:
 
 ```bash
-./scripts/bump-and-publish.sh X.Y.Z
+./scripts/bump-and-publish.sh --verify X.Y.Z
 ```
+
+**IMPORTANT: Always use the `--verify` flag when publishing**, unless the user specifies no verification is needed (e.g., re-running after a specific package failed and CI already passed).
 
 This script is **idempotent** - if it fails midway, re-run it and it will skip completed steps.
 
@@ -97,13 +99,7 @@ This script is **idempotent** - if it fails midway, re-run it and it will skip c
 3. Creates and pushes git tag (triggers GitHub Actions for .deb/.app builds)
 4. Publishes to Homebrew tap (fetches sha256, updates formula)
 5. Publishes to AUR (generates .SRCINFO, pushes to AUR repo)
-
-**To verify GitHub Actions completed successfully:**
-```bash
-./scripts/bump-and-publish.sh --verify X.Y.Z
-```
-
-This waits for the CI build and verifies all artifacts are available.
+6. Waits for GitHub Actions to complete and verifies all artifacts
 
 **Individual scripts** (used internally by bump-and-publish.sh):
 - `./scripts/bump-version.sh` - Updates version in all files
